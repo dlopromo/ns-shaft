@@ -1,0 +1,13 @@
+NS-SHAFT browser reconstruction
+
+This project references gameplay architecture from iPel/NS-SHAFT:
+https://github.com/iPel/NS-SHAFT
+
+Copyright 2017 pel
+Licensed under the Apache License, Version 2.0.
+
+This project also uses @tonejs/midi to parse the supplied Standard MIDI file.
+
+The original NS-SHAFT audiovisual assets and product are credited in the
+application to NAGI-P SOFT (1996-1997) and are used under the authorization
+stated by the project owner.

@@ -1,0 +1,233 @@
+[
+  {
+    "type": "WAVE",
+    "id": "107",
+    "language": 1041,
+    "bytes": 3050,
+    "file": "public/assets/extracted/wave-107-1041.bin"
+  },
+  {
+    "type": "WAVE",
+    "id": "108",
+    "language": 1041,
+    "bytes": 3583,
+    "file": "public/assets/extracted/wave-108-1041.bin"
+  },
+  {
+    "type": "WAVE",
+    "id": "109",
+    "language": 1041,
+    "bytes": 4888,
+    "file": "public/assets/extracted/wave-109-1041.bin"
+  },
+  {
+    "type": "WAVE",
+    "id": "110",
+    "language": 1041,
+    "bytes": 4924,
+    "file": "public/assets/extracted/wave-110-1041.bin"
+  },
+  {
+    "type": "WAVE",
+    "id": "111",
+    "language": 1041,
+    "bytes": 11999,
+    "file": "public/assets/extracted/wave-111-1041.bin"
+  },
+  {
+    "type": "WAVE",
+    "id": "112",
+    "language": 1041,
+    "bytes": 19624,
+    "file": "public/assets/extracted/wave-112-1041.bin"
+  },
+  {
+    "type": "WAVE",
+    "id": "113",
+    "language": 1041,
+    "bytes": 20029,
+    "file": "public/assets/extracted/wave-113-1041.bin"
+  },
+  {
+    "type": "WAVE",
+    "id": "114",
+    "language": 1041,
+    "bytes": 8894,
+    "file": "public/assets/extracted/wave-114-1041.bin"
+  },
+  {
+    "type": "WAVE",
+    "id": "115",
+    "language": 1041,
+    "bytes": 15270,
+    "file": "public/assets/extracted/wave-115-1041.bin"
+  },
+  {
+    "type": "RT_BITMAP",
+    "id": "101",
+    "language": 1041,
+    "bytes": 218664,
+    "file": "public/assets/extracted/rt_bitmap-101-1041.bmp"
+  },
+  {
+    "type": "RT_BITMAP",
+    "id": "102",
+    "language": 1041,
+    "bytes": 17448,
+    "file": "public/assets/extracted/rt_bitmap-102-1041.bmp"
+  },
+  {
+    "type": "RT_BITMAP",
+    "id": "103",
+    "language": 1041,
+    "bytes": 11184,
+    "file": "public/assets/extracted/rt_bitmap-103-1041.bmp"
+  },
+  {
+    "type": "RT_BITMAP",
+    "id": "104",
+    "language": 1041,
+    "bytes": 41384,
+    "file": "public/assets/extracted/rt_bitmap-104-1041.bmp"
+  },
+  {
+    "type": "RT_BITMAP",
+    "id": "105",
+    "language": 1041,
+    "bytes": 46060,
+    "file": "public/assets/extracted/rt_bitmap-105-1041.bmp"
+  },
+  {
+    "type": "RT_BITMAP",
+    "id": "106",
+    "language": 1041,
+    "bytes": 82106,
+    "file": "public/assets/extracted/rt_bitmap-106-1041.bmp"
+  },
+  {
+    "type": "RT_ICON",
+    "id": "1",
+    "language": 1041,
+    "bytes": 744,
+    "file": "public/assets/extracted/rt_icon-1-1041.bin"
+  },
+  {
+    "type": "RT_ICON",
+    "id": "2",
+    "language": 1041,
+    "bytes": 296,
+    "file": "public/assets/extracted/rt_icon-2-1041.bin"
+  },
+  {
+    "type": "RT_ICON",
+    "id": "3",
+    "language": 1041,
+    "bytes": 2216,
+    "file": "public/assets/extracted/rt_icon-3-1041.bin"
+  },
+  {
+    "type": "RT_ICON",
+    "id": "4",
+    "language": 1041,
+    "bytes": 1384,
+    "file": "public/assets/extracted/rt_icon-4-1041.bin"
+  },
+  {
+    "type": "RT_MENU",
+    "id": "116",
+    "language": 1041,
+    "bytes": 538,
+    "file": "public/assets/extracted/rt_menu-116-1041.bin"
+  },
+  {
+    "type": "RT_DIALOG",
+    "id": "134",
+    "language": 1041,
+    "bytes": 230,
+    "file": "public/assets/extracted/rt_dialog-134-1041.bin"
+  },
+  {
+    "type": "RT_DIALOG",
+    "id": "137",
+    "language": 1041,
+    "bytes": 182,
+    "file": "public/assets/extracted/rt_dialog-137-1041.bin"
+  },
+  {
+    "type": "RT_DIALOG",
+    "id": "138",
+    "language": 1041,
+    "bytes": 238,
+    "file": "public/assets/extracted/rt_dialog-138-1041.bin"
+  },
+  {
+    "type": "RT_DIALOG",
+    "id": "140",
+    "language": 1041,
+    "bytes": 348,
+    "file": "public/assets/extracted/rt_dialog-140-1041.bin"
+  },
+  {
+    "type": "RT_DIALOG",
+    "id": "161",
+    "language": 1041,
+    "bytes": 356,
+    "file": "public/assets/extracted/rt_dialog-161-1041.bin"
+  },
+  {
+    "type": "RT_DIALOG",
+    "id": "162",
+    "language": 1041,
+    "bytes": 170,
+    "file": "public/assets/extracted/rt_dialog-162-1041.bin"
+  },
+  {
+    "type": "RT_STRING",
+    "id": "1",
+    "language": 1041,
+    "bytes": 602,
+    "file": "public/assets/extracted/rt_string-1-1041.bin"
+  },
+  {
+    "type": "RT_STRING",
+    "id": "2",
+    "language": 1041,
+    "bytes": 60,
+    "file": "public/assets/extracted/rt_string-2-1041.bin"
+  },
+  {
+    "type": "RT_STRING",
+    "id": "3",
+    "language": 1041,
+    "bytes": 198,
+    "file": "public/assets/extracted/rt_string-3-1041.bin"
+  },
+  {
+    "type": "RT_STRING",
+    "id": "4",
+    "language": 1041,
+    "bytes": 92,
+    "file": "public/assets/extracted/rt_string-4-1041.bin"
+  },
+  {
+    "type": "RT_ACCELERATOR",
+    "id": "117",
+    "language": 1041,
+    "bytes": 8,
+    "file": "public/assets/extracted/rt_accelerator-117-1041.bin"
+  },
+  {
+    "type": "RT_GROUP_ICON",
+    "id": "118",
+    "language": 1041,
+    "bytes": 62,
+    "file": "public/assets/extracted/rt_group_icon-118-1041.bin"
+  },
+  {
+    "type": "RT_VERSION",
+    "id": "1",
+    "language": 1041,
+    "bytes": 700,
+    "file": "public/assets/extracted/rt_version-1-1041.bin"
+  }
+]

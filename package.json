@@ -1,0 +1,30 @@
+{
+  "name": "ns-shaft-browser",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "test:browser": "node tests/browser-qa.mjs",
+    "test:cross-browser": "node tests/cross-browser.mjs",
+    "test:watch": "vitest",
+    "extract:windows": "python3 tools/extract_pe_resources.py nssh13j/NSSHAFT.exe public/assets/extracted",
+    "assets:web": "python3 tools/convert_web_assets.py",
+    "assets:characters": "python3 tools/build_character_atlas.py",
+    "assets:objects": "python3 tools/build_object_atlas.py",
+    "assets:native": "python3 tools/build_native_sprite_sheet.py",
+    "research": "python3 tools/inventory.py"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "playwright": "^1.60.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@tonejs/midi": "^2.0.28"
+  }
+}

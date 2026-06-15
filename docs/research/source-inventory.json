@@ -1,0 +1,37 @@
+[
+  {
+    "path": "ns-shaft-13-jp.sit.hqx",
+    "bytes": 538394,
+    "sha256": "9b839d9f22cc34fd657279daa825846a95b56f07d76a55b6f913515d2fd05172"
+  },
+  {
+    "path": "nssh13j.lzh",
+    "bytes": 226877,
+    "sha256": "ad28bd15e53b5896ffb1e018805fe92296fe681979085502f15203a20688c508"
+  },
+  {
+    "path": "nssh13j/NSSHAFT.exe",
+    "bytes": 578560,
+    "sha256": "a95520c7a2de0bcf6c42a79bded2389266abc4049340a72e40f43c09a6fd2e51"
+  },
+  {
+    "path": "nssh13j/BGM.MID",
+    "bytes": 16175,
+    "sha256": "f3b2a7cbf649cee9fc7c7f8fef02d9c7938e8a07c2a0a7a9d765f9f80a5d8326"
+  },
+  {
+    "path": "nssh13j/NSSHAFT.HLP",
+    "bytes": 12711,
+    "sha256": "f2f4431ac7a8eec69baaa0334acd87bde6a8da84208a752dae107a808fd02265"
+  },
+  {
+    "path": "nssh13j/NSSHAFT.cnt",
+    "bytes": 401,
+    "sha256": "8de1f45691169b297b576ccff606a16acdfc0867a5fbc3c28f9ec3a8c4ee26a1"
+  },
+  {
+    "path": "nssh13j/readme.txt",
+    "bytes": 4510,
+    "sha256": "04e78cb58adb373de0314dd20b8eecc42d0edc056fc5712695ad02bbd6733c4e"
+  }
+]

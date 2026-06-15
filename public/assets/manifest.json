@@ -1,0 +1,25 @@
+{
+  "version": 3,
+  "source": "Authorized NS-SHAFT 1.3J Windows distribution",
+  "entries": [
+    { "id": "native-sprite-sheet", "resource": "101+103", "file": "web/sprites-native.png", "sha256": "0a32f11e05da3b7b1ddaaa513a3ff25ffb32452bd40dc0587d46853dea2cd869", "dimensions": "544x400", "usage": "Transparent derivative retaining every character and platform at original coordinates and native size" },
+    { "id": "character-atlas", "resource": "101+103", "file": "web/characters.png", "sha256": "caecbe25ec8aaff6fad9309bd55a1a3de7f79965ab2876aac02a43a4482c9139", "dimensions": "512x80", "usage": "Two colors, 16 native 32x40 masked frames each; four four-frame poses" },
+    { "id": "object-atlas", "resource": 101, "file": "web/objects.png", "sha256": "be39fa0237657d4dd92fabd9b498555dd64b104aae1e382b64d4d5ff9dfd7269", "dimensions": "960x192", "usage": "Legacy rearranged derivative; runtime now uses native-coordinate sprites-native.png" },
+    { "id": "main-atlas", "resource": 101, "file": "web/rt_bitmap-101-1041.png", "usage": "P1/P2 animation, masks, platforms, HUD digits, pause, game over, ceiling spikes" },
+    { "id": "shaft-wall", "resource": 102, "file": "web/rt_bitmap-102-1041.png", "usage": "Scrolling shaft wall texture" },
+    { "id": "sprite-mask", "resource": 103, "file": "web/rt_bitmap-103-1041.png", "usage": "Original monochrome transparency masks; retained for atlas documentation" },
+    { "id": "title", "resource": 104, "file": "web/rt_bitmap-104-1041.png", "usage": "NS-SHAFT Ver 1.3J title screen" },
+    { "id": "about", "resource": 105, "file": "web/rt_bitmap-105-1041.png", "usage": "Copyright and programming panel" },
+    { "id": "records", "resource": 106, "file": "web/rt_bitmap-106-1041.png", "sha256": "ef89ccfdf3339fc359d01fb68ffba329652347f46bac2165660ebbf10deec5e4", "dimensions": "634x436", "usage": "Native application frame, HUD, sidebar, difficulty and record background" },
+    { "id": "effect-land", "resource": 107, "file": "extracted/wave-107-1041.bin", "usage": "Landing" },
+    { "id": "effect-heal", "resource": 108, "file": "extracted/wave-108-1041.bin", "usage": "Health recovery" },
+    { "id": "effect-hurt", "resource": 109, "file": "extracted/wave-109-1041.bin", "usage": "Spike damage" },
+    { "id": "effect-spring", "resource": 110, "file": "extracted/wave-110-1041.bin", "usage": "Spring platform" },
+    { "id": "effect-conveyor", "resource": 111, "file": "extracted/wave-111-1041.bin", "usage": "Conveyor platform" },
+    { "id": "effect-rotate", "resource": 112, "file": "extracted/wave-112-1041.bin", "usage": "Rotating platform" },
+    { "id": "effect-ceiling", "resource": 113, "file": "extracted/wave-113-1041.bin", "usage": "Ceiling spike damage" },
+    { "id": "effect-death", "resource": 114, "file": "extracted/wave-114-1041.bin", "usage": "Player death" },
+    { "id": "effect-pause", "resource": 115, "file": "extracted/wave-115-1041.bin", "usage": "Pause toggle" },
+    { "id": "bgm", "file": "BGM.MID", "sha256": "f3b2a7cbf649cee9fc7c7f8fef02d9c7938e8a07c2a0a7a9d765f9f80a5d8326", "usage": "Original MIDI parsed and synthesized by Web Audio" }
+  ]
+}
