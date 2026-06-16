@@ -14,7 +14,7 @@ describe("packed bitmap source boundaries", () => {
   });
 
   test("renders platform objects from a separated transparent atlas", () => {
-    expect(SPRITE_ATLAS.nativeImage).toBe("/assets/web/sprites-native.png");
+    expect(SPRITE_ATLAS.nativeImage).toBe(`${import.meta.env.BASE_URL}assets/web/sprites-native.png`);
     for (const frame of Object.values(SPRITE_ATLAS.platformAnimations).flat()) {
       expect(frame.source).toBe("native");
     }

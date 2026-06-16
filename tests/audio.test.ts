@@ -8,6 +8,6 @@ describe("original audio manifest", () => {
   });
 
   test("retains the original MIDI as the music source", () => {
-    expect(AUDIO_MANIFEST.music).toBe("/assets/BGM.MID");
+    expect(AUDIO_MANIFEST.music).toBe(`${import.meta.env.BASE_URL}assets/BGM.MID`);
   });
 });
