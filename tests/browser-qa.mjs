@@ -215,7 +215,7 @@ await page.evaluate(() => {
     {
       id: 21, x: 80, y: 260, width: 96, kind: "rotating",
       variant: "disappearing", direction: 1, phase: 0, collidable: true,
-      activationState: "triggered", activationAgeMs: 480, height: 12
+      activationState: "triggered", activationAgeMs: 180, height: 12
     },
     {
       id: 24, x: 80, y: 350, width: 96, kind: "normal",
@@ -233,7 +233,7 @@ state = await capture("05dc-rotating-delay-ended");
 if (state.players[0].standingPlatformId !== null ||
     state.platforms[0].collidable ||
     state.platforms[0].activationState !== "disappearing") {
-  throw new Error(`Rotating block did not drop after 500ms: ${JSON.stringify(state)}`);
+  throw new Error(`Rotating block did not drop after 200ms: ${JSON.stringify(state)}`);
 }
 
 await page.evaluate(() => {
@@ -241,7 +241,7 @@ await page.evaluate(() => {
     {
       id: 21, x: 80, y: 220, width: 96, kind: "rotating",
       variant: "disappearing", direction: 1, phase: 0, collidable: false,
-      activationState: "disappearing", activationAgeMs: 1040, height: 0
+      activationState: "disappearing", activationAgeMs: 440, height: 0
     },
     {
       id: 24, x: 80, y: 350, width: 96, kind: "normal",
@@ -252,8 +252,8 @@ await page.evaluate(() => {
   window.advanceTime(1);
 });
 state = await capture("05dd-rotating-last-frame");
-if (state.platforms[0].activationAgeMs < 1040 ||
-    state.platforms[0].activationAgeMs >= 1100 ||
+if (state.platforms[0].activationAgeMs < 440 ||
+    state.platforms[0].activationAgeMs >= 500 ||
     state.platforms[0].activationState !== "disappearing") {
   throw new Error(`Rotating block skipped its last frame: ${JSON.stringify(state.platforms[0])}`);
 }

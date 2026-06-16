@@ -11,8 +11,8 @@ export function springFrameIndex(ageMs: number): number {
 }
 
 export function rotatingFrameIndex(ageMs: number): number {
-  if (ageMs >= 600) return 0;
-  const step = Math.floor(Math.max(0, ageMs) / (600 / 6)) + 1;
+  if (ageMs >= 300) return 0;
+  const step = Math.floor(Math.max(0, ageMs) / (300 / 6)) + 1;
   return step < 6 ? step : 0;
 }
 
@@ -145,7 +145,7 @@ export class Renderer {
       const frames = SPRITE_ATLAS.platformAnimations.rotating;
       if (platform.activationState !== "disappearing") return frames[0];
       return frames[rotatingFrameIndex(
-        platform.activationAgeMs - 500
+        platform.activationAgeMs - 200
       )];
     }
     if (platform.variant === "spring") {

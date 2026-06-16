@@ -11,10 +11,10 @@ describe("native platform animation timing", () => {
       .toEqual([5, 4, 3, 2, 1, 0]);
   });
 
-  test("shows visible rotation immediately after the 500ms hold", () => {
-    expect([0, 120, 240, 360, 480, 599].map(rotatingFrameIndex))
-      .toEqual([1, 2, 3, 4, 5, 0]);
-    expect(rotatingFrameIndex(600)).toBe(0);
+  test("shows visible rotation immediately after the 200ms hold", () => {
+    expect([0, 50, 100, 150, 200, 250, 299].map(rotatingFrameIndex))
+      .toEqual([1, 2, 3, 4, 5, 0, 0]);
+    expect(rotatingFrameIndex(300)).toBe(0);
   });
 
   test("mirrors the native left-facing character only when moving right", () => {

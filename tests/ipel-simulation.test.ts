@@ -16,8 +16,8 @@ describe("iPel-aligned millisecond simulation", () => {
       conveyorVelocity: 0.1,
       springVelocity: -0.5,
       springCompressionMs: 100,
-      disappearingHoldMs: 500,
-      disappearingTurnMs: 600,
+      disappearingHoldMs: 200,
+      disappearingTurnMs: 300,
       platformGap: 60,
       platformCollisionHeight: 12,
       playerCollisionSize: 26,
@@ -89,7 +89,7 @@ describe("iPel-aligned millisecond simulation", () => {
     expect(game.snapshot().platforms[0].activationState).toBe("active");
   });
 
-  test("holds the player for 500ms, then drops them for one roll and resets", () => {
+  test("holds the player for 200ms, then drops them for one roll and resets", () => {
     const game = new GameSimulation({ seed: 45, difficulty: "hard", players: 1 });
     game.debugSetPlatforms([
       {
@@ -110,15 +110,15 @@ describe("iPel-aligned millisecond simulation", () => {
     expect(game.snapshot().platforms[0]).toMatchObject({
       activationState: "triggered", collidable: true, activationAgeMs: 0
     });
-    game.step(idle, 480);
+    game.step(idle, 199);
     expect(game.snapshot().players[0].standingPlatformId).toBe(1);
     expect(game.snapshot().platforms[0].collidable).toBe(true);
-    game.step(idle, 20);
+    game.step(idle, 1);
     expect(game.snapshot().players[0].standingPlatformId).toBeNull();
     expect(game.snapshot().platforms[0]).toMatchObject({
-      activationState: "disappearing", collidable: false, activationAgeMs: 500
+      activationState: "disappearing", collidable: false, activationAgeMs: 200
     });
-    game.step(idle, 580);
+    game.step(idle, 280);
     expect(game.snapshot().platforms[0].activationState).toBe("disappearing");
     game.step(idle, 20);
     expect(game.snapshot().platforms[0]).toMatchObject({

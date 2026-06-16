@@ -80,8 +80,8 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   seventh animation step returns to the first grey image; the blue normal
   floor is not part of this sequence. Its first crop is the complete original
   96x16 image at y=154, rather than the truncated 96x10 crop at y=160.
-  Touching it keeps collision for 500ms before dropping the player; the
-  following 600ms roll then restores the first frame and collision.
+  Touching it keeps collision for 200ms before dropping the player; the
+  following 300ms roll then restores the first frame and collision.
 - Added renderer timing, collision-state and browser QA coverage for the
   rotating floor's drop, final frame and reset states. Native-size screenshots
   are `05d`, `05dd` and `05de` under `artifacts/qa/current/`.
