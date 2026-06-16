@@ -7,7 +7,7 @@ export const GAME_LAYOUT = {
     lifeBar: { x: 46, y: 28 },
     floorPrefix: { x: 194, y: 12 },
     floorDigits: { x: 262, y: 12, step: 30 },
-    floorSuffix: { x: 378, y: 12 }
+    floorSuffix: { x: 382, y: 12 }
   },
   sidebar: {
     x: 447,

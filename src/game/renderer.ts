@@ -172,13 +172,19 @@ export class Renderer {
   }
 
   private drawHud(state: GameStateSnapshot): void {
-    if (!this.main.complete) return;
+    if (!this.native.complete) return;
     const layout = GAME_LAYOUT.hud;
     this.drawSpriteAt(SPRITE_ATLAS.lifeLabel, layout.lifeLabel.x, layout.lifeLabel.y);
     const maxHealth = SPRITE_ATLAS.lifeBars.length - 1;
     const health = Math.max(0, Math.min(maxHealth, state.players[0]?.health ?? 0));
     this.drawSpriteAt(SPRITE_ATLAS.lifeBars[health], layout.lifeBar.x, layout.lifeBar.y);
-    this.drawSpriteAt(SPRITE_ATLAS.floorPrefix, layout.floorPrefix.x, layout.floorPrefix.y);
+    for (let index = 0; index < SPRITE_ATLAS.floorPrefixParts.length; index += 1) {
+      this.drawSpriteAt(
+        SPRITE_ATLAS.floorPrefixParts[index],
+        layout.floorPrefix.x + index * 38,
+        layout.floorPrefix.y
+      );
+    }
     const value = String(state.floor).padStart(4, "0").slice(-4);
     for (let index = 0; index < value.length; index += 1) {
       this.drawSpriteAt(
@@ -191,7 +197,7 @@ export class Renderer {
   }
 
   private drawSidebar(state: GameStateSnapshot): void {
-    if (!this.main.complete) return;
+    if (!this.native.complete) return;
     const difficultyIndex = { easy: 0, normal: 1, hard: 2 }[state.difficulty];
     const difficulty = GAME_LAYOUT.sidebar.difficultyValue;
     const difficultySprite = SPRITE_ATLAS.difficultyLabels[difficultyIndex];

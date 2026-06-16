@@ -8,8 +8,8 @@ describe("original Windows sprite atlas", () => {
     expect(Object.keys(SPRITE_ATLAS.platforms).sort()).toEqual([
       "conveyor", "normal", "rotating", "spike", "spring"
     ]);
-    expect(SPRITE_ATLAS.pause.source).toBe("main");
-    expect(SPRITE_ATLAS.gameOver.source).toBe("main");
+    expect(SPRITE_ATLAS.pause.source).toBe("native");
+    expect(SPRITE_ATLAS.gameOver.source).toBe("native");
   });
 
   test("defines foot anchors, collision boxes and mirror-only left facing", () => {
@@ -88,10 +88,16 @@ describe("original Windows sprite atlas", () => {
       [384, index * 16, 96, 16]
     ));
     expect(SPRITE_ATLAS.floorPrefix).toMatchObject({
-      x: 128, y: 320, width: 64, height: 32
+      x: 128, y: 320, width: 72, height: 32
     });
+    expect(SPRITE_ATLAS.floorPrefixParts.map(({ x, y, width, height }) =>
+      [x, y, width, height]
+    )).toEqual([
+      [128, 320, 36, 32],
+      [166, 320, 34, 32]
+    ]);
     expect(SPRITE_ATLAS.floorSuffix).toMatchObject({
-      x: 192, y: 320, width: 40, height: 32
+      x: 196, y: 320, width: 40, height: 32
     });
     expect(SPRITE_ATLAS.difficultyLabels.map(({ x, y, width, height }) =>
       [x, y, width, height]

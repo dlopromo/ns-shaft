@@ -102,6 +102,11 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   shifted clear of the fourth large digit, hard difficulty no longer includes
   a stray `う` from the neighboring packed label, and browser QA now guards the
   suffix gap plus difficulty-label stray pixels.
+- Reworked the floor HUD text after boundary review: `地下` is split into
+  audited `地` and `下` source rectangles, `階` uses the exact `x=196..236`
+  crop before the neighboring magenta `1P` pixels, and all HUD glyphs now draw
+  from the transparent native sheet so large digit black backgrounds cannot cut
+  adjacent Japanese glyph edges.
 
 ## Remaining
 

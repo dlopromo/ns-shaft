@@ -65,7 +65,7 @@ The gameplay renderer uses the Windows assets at their original pixel dimensions
 
 - LIFE label at `(71,12)` and the 12 native 96 x 16 health-bar states at `(46,28)`.
 - Floor prefix at `(194,12)`, four unscaled 32 x 32 digits from `(262,12)`,
-  and the floor suffix at `(378,12)`.
+  and the floor suffix at `(382,12)`.
 - The 128 x 128 rock texture tiles across the complete 420 x 356 playfield.
 - The 16 x 32 wall tile repeats at playfield-local `x=0` and `x=400`.
 - The complete 384 x 16 ceiling-spike strip draws once at local `(16,0)`.
@@ -76,6 +76,13 @@ These positions were measured against the Windows 1.3J reference screenshot and
 cross-checked with the 1.2J gameplay recording. The difficulty labels are tight
 right-aligned crops from the packed row in bitmap 101, because wider crops include
 neighboring Japanese text fragments.
+
+The floor text row is also packed tightly. `地下` is rendered from two audited
+source rectangles, `地=(128,320,36,32)` and `下=(166,320,34,32)`, rather than a
+single guessed grid cell. `階=(196,320,40,32)` includes the complete green/yellow
+right edge; the next source column at `x=236` is already the magenta `1P` artwork,
+so extending the crop would import a neighboring element. These bounds are
+recorded by `tools/audit_sprite_boundaries.py`.
 
 ## Packed Sprite Segmentation
 

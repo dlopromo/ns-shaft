@@ -36,6 +36,31 @@ OBJECT_FRAMES = [
     (384, 368, 96, 32),
 ]
 
+UI_FRAMES = [
+    (0, 320, 128, 40),
+    (128, 320, 72, 32),
+    (128, 320, 36, 32),
+    (166, 320, 34, 32),
+    (196, 320, 40, 32),
+    (224, 352, 48, 16),
+    *[(384, index * 16, 96, 16) for index in range(12)],
+    (128, 352, 96, 16),
+    *[(480, index * 32, 32, 32) for index in range(10)],
+    (40, 385, 58, 13),
+    (155, 385, 43, 13),
+    (224, 385, 74, 13),
+    (272, 224, 16, 13),
+    (272, 237, 16, 14),
+    (272, 252, 16, 13),
+    (272, 266, 16, 14),
+    (272, 280, 16, 13),
+    (272, 294, 16, 14),
+    (272, 308, 16, 14),
+    (272, 322, 16, 13),
+    (272, 336, 16, 14),
+    (272, 350, 16, 14),
+]
+
 
 def remove_border_background(image: Image.Image) -> Image.Image:
     rgba = image.convert("RGBA")
@@ -86,6 +111,12 @@ for x, y, width, height, mask_x, mask_y in CHARACTER_FRAMES:
     output.alpha_composite(frame, (x, y))
 
 for x, y, width, height in OBJECT_FRAMES:
+    frame = remove_border_background(
+        source.crop((x, y, x + width, y + height))
+    )
+    output.alpha_composite(frame, (x, y))
+
+for x, y, width, height in UI_FRAMES:
     frame = remove_border_background(
         source.crop((x, y, x + width, y + height))
     )

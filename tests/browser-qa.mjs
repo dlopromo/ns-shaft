@@ -70,7 +70,9 @@ const nativePixelAudit = await page.locator("#game").evaluate((canvas) => {
     leftWallBluePixels: count(22, 94, 16, 32, (r, g, b) => b > r && b > g),
     rightWallBluePixels: count(422, 94, 16, 32, (r, g, b) => b > r && b > g),
     floorPrefixStrayPixels: count(186, 12, 8, 32, (r, g, b) => r > 180 && g > 180 && b > 180),
-    floorSuffixGapPixels: count(382, 12, 4, 32, (r, g, b) => r > 180 && g > 180 && b > 120),
+    floorPrefixRightPixels: count(258, 12, 8, 32, (r, g, b) => r > 110 && g > 140 && b < 180),
+    floorSuffixGapPixels: count(378, 12, 4, 32, (r, g, b) => r > 180 && g > 180 && b > 120),
+    floorSuffixRightPixels: count(414, 12, 8, 32, (r, g, b) => r > 110 && g > 140 && b < 180),
     difficultyLeftStrayPixels: count(500, 113, 28, 13, (r, g, b) => r > 160 && g > 160 && b > 160)
   };
 });
@@ -79,7 +81,9 @@ if (nativePixelAudit.texturedPixels < 500 ||
     nativePixelAudit.leftWallBluePixels < 100 ||
     nativePixelAudit.rightWallBluePixels < 100 ||
     nativePixelAudit.floorPrefixStrayPixels > 4 ||
+    nativePixelAudit.floorPrefixRightPixels < 8 ||
     nativePixelAudit.floorSuffixGapPixels > 4 ||
+    nativePixelAudit.floorSuffixRightPixels < 8 ||
     nativePixelAudit.difficultyLeftStrayPixels > 4) {
   throw new Error(`Native playfield art is cropped or missing: ${JSON.stringify(nativePixelAudit)}`);
 }

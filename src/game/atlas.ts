@@ -33,6 +33,16 @@ const sprite = (
   usage
 });
 
+const ui = (
+  x: number, y: number, width: number, height: number
+): SpriteDefinition => ({
+  source: "native", x, y, width, height,
+  anchor: { x: 0, y: height },
+  collision: { x: 0, y: 0, width, height },
+  mirrorX: false,
+  usage: "ui"
+});
+
 const object = (
   x: number, y: number, width: number, height: number
 ): SpriteDefinition => ({
@@ -107,32 +117,36 @@ export const SPRITE_ATLAS = {
   },
   wall: sprite(512, 0, 16, 32),
   ceiling: sprite(0, 368, 384, 16),
-  pause: sprite(0, 320, 128, 40, "ui"),
-  floorPrefix: sprite(128, 320, 64, 32, "ui"),
-  floorSuffix: sprite(192, 320, 40, 32, "ui"),
-  lifeLabel: sprite(224, 352, 48, 16, "ui"),
+  pause: ui(0, 320, 128, 40),
+  floorPrefix: ui(128, 320, 72, 32),
+  floorPrefixParts: [
+    ui(128, 320, 36, 32),
+    ui(166, 320, 34, 32)
+  ],
+  floorSuffix: ui(196, 320, 40, 32),
+  lifeLabel: ui(224, 352, 48, 16),
   lifeBars: Array.from({ length: 12 }, (_, index) =>
-    sprite(384, index * 16, 96, 16, "ui")
+    ui(384, index * 16, 96, 16)
   ),
-  gameOver: sprite(128, 352, 96, 16, "ui"),
+  gameOver: ui(128, 352, 96, 16),
   digits: Array.from({ length: 10 }, (_, index) =>
-    sprite(480, index * 32, 32, 32, "ui")
+    ui(480, index * 32, 32, 32)
   ),
   difficultyLabels: [
-    sprite(40, 385, 58, 13, "ui"),
-    sprite(155, 385, 43, 13, "ui"),
-    sprite(224, 385, 74, 13, "ui")
+    ui(40, 385, 58, 13),
+    ui(155, 385, 43, 13),
+    ui(224, 385, 74, 13)
   ],
   smallDigits: [
-    sprite(272, 224, 16, 13, "ui"),
-    sprite(272, 237, 16, 14, "ui"),
-    sprite(272, 252, 16, 13, "ui"),
-    sprite(272, 266, 16, 14, "ui"),
-    sprite(272, 280, 16, 13, "ui"),
-    sprite(272, 294, 16, 14, "ui"),
-    sprite(272, 308, 16, 14, "ui"),
-    sprite(272, 322, 16, 13, "ui"),
-    sprite(272, 336, 16, 14, "ui"),
-    sprite(272, 350, 16, 14, "ui")
+    ui(272, 224, 16, 13),
+    ui(272, 237, 16, 14),
+    ui(272, 252, 16, 13),
+    ui(272, 266, 16, 14),
+    ui(272, 280, 16, 13),
+    ui(272, 294, 16, 14),
+    ui(272, 308, 16, 14),
+    ui(272, 322, 16, 13),
+    ui(272, 336, 16, 14),
+    ui(272, 350, 16, 14)
   ]
 };
