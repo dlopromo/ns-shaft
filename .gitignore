@@ -3,6 +3,8 @@ dist/
 playwright-report/
 test-results/
 artifacts/qa/
+artifacts/asset-review/
+artifacts/research/hud-debug/
 analysis/work/
 *.tsbuildinfo
 vite.config.js

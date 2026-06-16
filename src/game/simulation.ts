@@ -18,6 +18,7 @@ export const IPEL_PHYSICS = {
   platformGap: 60,
   platformCollisionHeight: 12,
   playerCollisionSize: 26,
+  maxHealth: 12,
   platformWidth: 96,
   spikeDamage: 5,
   ceilingDamage: 5,
@@ -64,13 +65,14 @@ export class GameSimulation {
       vy: 0,
       width: IPEL_PHYSICS.playerCollisionSize,
       height: IPEL_PHYSICS.playerCollisionSize,
-      health: 10,
+      health: IPEL_PHYSICS.maxHealth,
       alive: true,
       color: id === 0 ? "yellow" : "green",
       pose: "fall",
       facing: "right",
       invulnerableTicks: 0,
       standingPlatformId: null,
+      standingPlayerId: null,
       onPlatformSince: null,
       hurtUntilTick: 0,
       hurtUntilMs: 0
@@ -135,9 +137,15 @@ export class GameSimulation {
       platform.y + IPEL_PHYSICS.platformCollisionHeight >= 0
     );
     this.fillPlatforms();
+    const previousPlayers = this.state.players.map((player) => ({
+      id: player.id,
+      x: player.x,
+      y: player.y
+    }));
     for (const player of this.state.players) {
       this.updatePlayer(player, input.players[player.id], stepMs, velocity);
     }
+    this.resolvePlayerOverlaps(previousPlayers);
     this.state.cameraY += -velocity * stepMs;
     if (!this.state.players.some((player) => player.alive)) this.state.mode = "gameover";
   }
@@ -194,10 +202,22 @@ export class GameSimulation {
 
     const standing = player.standingPlatformId === null ? undefined :
       this.state.platforms.find((platform) => platform.id === player.standingPlatformId);
+    const standingPlayer = player.standingPlayerId === null ? undefined :
+      this.state.players.find((other) => other.id === player.standingPlayerId && other.alive);
     player.vx = standing?.variant.startsWith("conveyor")
       ? standing.conveyorVelocity
       : 0;
     player.x = this.clampPlayerX(player.x + (player.vx + control) * stepMs);
+    if (standingPlayer && this.playerOverlapsPlayerHorizontally(player, standingPlayer)) {
+      player.y = standingPlayer.y - standingPlayer.height;
+      player.vy = standingPlayer.vy;
+      player.pose = direction === 0 ? "stand" : "walk";
+      this.resolveCeiling(player);
+      return;
+    } else if (player.standingPlayerId !== null) {
+      player.standingPlayerId = null;
+      player.onPlatformSince = null;
+    }
     if (standing?.collidable && this.playerOverlapsPlatform(player, standing)) {
       player.y = standing.y;
       player.vy = platformVelocity;
@@ -209,6 +229,7 @@ export class GameSimulation {
         if (standing.activationState === "active") this.triggerPlatform(standing);
         if (standing.activationAgeMs >= SPRING_LAUNCH_MS) {
           player.standingPlatformId = null;
+          player.standingPlayerId = null;
           player.onPlatformSince = null;
           player.vy = IPEL_PHYSICS.springVelocity;
           this.events.push({ type: "spring", playerId: player.id, platformId: standing.id });
@@ -223,6 +244,7 @@ export class GameSimulation {
     } else if (player.standingPlatformId !== null) {
       player.vx = 0;
       player.standingPlatformId = null;
+      player.standingPlayerId = null;
       player.onPlatformSince = null;
     }
 
@@ -230,10 +252,20 @@ export class GameSimulation {
     const distance = player.vy * stepMs +
       0.5 * IPEL_PHYSICS.gravity * stepMs * stepMs;
     const newFoot = player.y + distance;
-    const landing = player.vy >= 0
+    const playerLanding = player.vy >= 0
+      ? this.findPlayerLanding(player, previousFoot, newFoot)
+      : undefined;
+    const landing = !playerLanding && player.vy >= 0
       ? this.findLanding(player, previousFoot, newFoot, platformVelocity, stepMs)
       : undefined;
-    if (landing) {
+    if (playerLanding) {
+      player.y = playerLanding.y - playerLanding.height;
+      player.vy = playerLanding.vy;
+      player.standingPlayerId = playerLanding.id;
+      player.standingPlatformId = null;
+      player.onPlatformSince = this.state.timeMs;
+      player.pose = "stand";
+    } else if (landing) {
       player.y = landing.y;
       this.land(player, landing, platformVelocity);
     } else {
@@ -247,8 +279,23 @@ export class GameSimulation {
       player.alive = false;
       player.pose = "dead";
       player.standingPlatformId = null;
+      player.standingPlayerId = null;
       this.events.push({ type: "death", playerId: player.id });
     }
+  }
+
+  private findPlayerLanding(
+    player: PlayerState,
+    previousFoot: number,
+    newFoot: number
+  ): PlayerState | undefined {
+    return this.state.players.find((other) =>
+      other.id !== player.id &&
+      other.alive &&
+      this.playerOverlapsPlayerHorizontally(player, other) &&
+      previousFoot <= other.y - other.height &&
+      newFoot >= other.y - other.height
+    );
   }
 
   private findLanding(
@@ -269,6 +316,7 @@ export class GameSimulation {
   private land(player: PlayerState, platform: PlatformState, velocity: number): void {
     player.vy = velocity;
     player.standingPlatformId = platform.id;
+    player.standingPlayerId = null;
     player.onPlatformSince = this.state.timeMs;
     if (platform.variant === "disappearing" || platform.variant === "spring") {
       this.triggerPlatform(platform);
@@ -300,6 +348,7 @@ export class GameSimulation {
       const platform = this.state.platforms.find((item) => item.id === player.standingPlatformId);
       if (platform?.variant.startsWith("conveyor")) player.vx = 0;
       player.standingPlatformId = null;
+      player.standingPlayerId = null;
       player.onPlatformSince = null;
     }
     player.health = Math.max(0, player.health - IPEL_PHYSICS.ceilingDamage);
@@ -318,7 +367,7 @@ export class GameSimulation {
       return;
     }
     const before = player.health;
-    player.health = Math.min(10, player.health + 1);
+    player.health = Math.min(IPEL_PHYSICS.maxHealth, player.health + 1);
     if (player.health > before) this.events.push({ type: "heal", playerId: player.id });
   }
 
@@ -378,9 +427,7 @@ export class GameSimulation {
   }
 
   private randomPlatformX(): number {
-    return Math.round(
-      this.random.next() * WIDTH - IPEL_PHYSICS.platformWidth * 0.5
-    );
+    return Math.round(this.random.next() * (WIDTH - IPEL_PHYSICS.platformWidth));
   }
 
   private pickVariant(): PlatformVariant {
@@ -445,6 +492,47 @@ export class GameSimulation {
   private playerOverlapsPlatform(player: PlayerState, platform: PlatformState): boolean {
     const half = player.width / 2;
     return player.x + half > platform.x && player.x - half < platform.x + platform.width;
+  }
+
+  private playerOverlapsPlayerHorizontally(player: PlayerState, other: PlayerState): boolean {
+    const half = player.width / 2;
+    const otherHalf = other.width / 2;
+    return player.x + half > other.x - otherHalf &&
+      player.x - half < other.x + otherHalf;
+  }
+
+  private playerBoxesOverlap(first: PlayerState, second: PlayerState): boolean {
+    const half = first.width / 2;
+    const secondHalf = second.width / 2;
+    return first.x + half > second.x - secondHalf &&
+      first.x - half < second.x + secondHalf &&
+      first.y > second.y - second.height &&
+      first.y - first.height < second.y;
+  }
+
+  private resolvePlayerOverlaps(previousPlayers: { id: number; x: number; y: number }[]): void {
+    for (let firstIndex = 0; firstIndex < this.state.players.length; firstIndex += 1) {
+      for (let secondIndex = firstIndex + 1; secondIndex < this.state.players.length; secondIndex += 1) {
+        const first = this.state.players[firstIndex];
+        const second = this.state.players[secondIndex];
+        if (!first.alive || !second.alive || !this.playerBoxesOverlap(first, second)) continue;
+        const previousFirst = previousPlayers.find((player) => player.id === first.id);
+        const previousSecond = previousPlayers.find((player) => player.id === second.id);
+        const firstWasLeft = (previousFirst?.x ?? first.x) <= (previousSecond?.x ?? second.x);
+        const left = firstWasLeft ? first : second;
+        const right = firstWasLeft ? second : first;
+        const distance = right.x - left.x;
+        const minimum = Math.max(left.width, right.width);
+        if (distance >= minimum) continue;
+        const midpoint = (left.x + right.x) / 2;
+        left.x = this.clampPlayerX(midpoint - minimum / 2);
+        right.x = this.clampPlayerX(left.x + minimum);
+        if (right.x - left.x < minimum) {
+          right.x = this.clampPlayerX(midpoint + minimum / 2);
+          left.x = this.clampPlayerX(right.x - minimum);
+        }
+      }
+    }
   }
 
   private clampPlayerX(x: number): number {

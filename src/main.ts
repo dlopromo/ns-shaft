@@ -21,6 +21,7 @@ declare global {
 
 const root = document.querySelector<HTMLDivElement>("#app");
 if (!root) throw new Error("#app was not found");
+const assetUrl = (path: string): string => `${import.meta.env.BASE_URL}${path}`;
 
 root.innerHTML = `
   <main class="cabinet">
@@ -29,7 +30,7 @@ root.innerHTML = `
       <button id="pause-control" class="frame-control pause-control" aria-label="暫停"></button>
       <button id="abort-control" class="frame-control abort-control" aria-label="中止遊戲"></button>
       <div id="title-screen" class="screen title-screen">
-        <img class="title-art" src="/assets/web/rt_bitmap-104-1041.png" alt="NS-SHAFT Ver 1.3J">
+        <img class="title-art" src="${assetUrl("assets/web/rt_bitmap-104-1041.png")}" alt="NS-SHAFT Ver 1.3J">
         <nav class="main-menu">
           <button data-start="1">１人プレイ</button>
           <button data-start="2">２人プレイ</button>
@@ -72,7 +73,7 @@ root.innerHTML = `
       </section>
 
       <section id="about-panel" class="screen about-screen" hidden>
-        <img src="/assets/web/rt_bitmap-105-1041.png" alt="NS-SHAFT copyright">
+        <img src="${assetUrl("assets/web/rt_bitmap-105-1041.png")}" alt="NS-SHAFT copyright">
         <button data-close>戻る</button>
       </section>
 
@@ -292,10 +293,9 @@ window.addEventListener("blur", () => {
 });
 
 function updateFullscreenScale(): void {
-  gameFrame.style.setProperty(
-    "--game-scale",
-    String(integerScaleForViewport(window.innerWidth, window.innerHeight))
-  );
+  const scale = String(integerScaleForViewport(window.innerWidth, window.innerHeight));
+  cabinet.style.setProperty("--game-scale", scale);
+  gameFrame.style.setProperty("--game-scale", scale);
 }
 window.addEventListener("resize", updateFullscreenScale);
 document.addEventListener("fullscreenchange", updateFullscreenScale);

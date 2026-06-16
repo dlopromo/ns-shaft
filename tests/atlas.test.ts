@@ -81,24 +81,24 @@ describe("original Windows sprite atlas", () => {
     expect(SPRITE_ATLAS.wall).toMatchObject({
       source: "main", x: 512, y: 0, width: 16, height: 32
     });
-    expect(SPRITE_ATLAS.lifeBars).toHaveLength(11);
+    expect(SPRITE_ATLAS.lifeBars).toHaveLength(12);
     expect(SPRITE_ATLAS.lifeBars.map(({ x, y, width, height }) =>
       [x, y, width, height]
-    )).toEqual(Array.from({ length: 11 }, (_, index) =>
+    )).toEqual(Array.from({ length: 12 }, (_, index) =>
       [384, index * 16, 96, 16]
     ));
     expect(SPRITE_ATLAS.floorPrefix).toMatchObject({
       x: 128, y: 320, width: 64, height: 32
     });
     expect(SPRITE_ATLAS.floorSuffix).toMatchObject({
-      x: 192, y: 320, width: 32, height: 32
+      x: 192, y: 320, width: 40, height: 32
     });
     expect(SPRITE_ATLAS.difficultyLabels.map(({ x, y, width, height }) =>
       [x, y, width, height]
     )).toEqual([
-      [0, 384, 96, 16],
-      [96, 384, 96, 16],
-      [192, 384, 96, 16]
+      [40, 385, 58, 13],
+      [155, 385, 43, 13],
+      [224, 385, 74, 13]
     ]);
     expect(SPRITE_ATLAS.smallDigits.map(({ x, y, width, height }) =>
       [x, y, width, height]

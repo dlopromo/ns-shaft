@@ -25,12 +25,15 @@ const canvasGeometry = await page.locator("#game").evaluate((canvas) => ({
   width: canvas.width,
   height: canvas.height,
   cssWidth: canvas.getBoundingClientRect().width,
-  cssHeight: canvas.getBoundingClientRect().height
+  cssHeight: canvas.getBoundingClientRect().height,
+  left: Math.round(canvas.getBoundingClientRect().left),
+  top: Math.round(canvas.getBoundingClientRect().top)
 }));
 if (JSON.stringify(canvasGeometry) !== JSON.stringify({
-  width: 634, height: 436, cssWidth: 634, cssHeight: 436
+  width: 634, height: 436, cssWidth: 634, cssHeight: 436,
+  left: 133, top: 132
 })) {
-  throw new Error(`Canvas is not native size: ${JSON.stringify(canvasGeometry)}`);
+  throw new Error(`Canvas is not native size and centered: ${JSON.stringify(canvasGeometry)}`);
 }
 await capture("01-title-native");
 
@@ -65,13 +68,19 @@ const nativePixelAudit = await page.locator("#game").evaluate((canvas) => {
     texturedPixels: count(180, 180, 48, 48, (r, g, b) => b > r + 8 && b > g + 8),
     ceilingBrightPixels: count(38, 62, 384, 16, (r, g, b) => r > 120 && g > 120 && b > 120),
     leftWallBluePixels: count(22, 94, 16, 32, (r, g, b) => b > r && b > g),
-    rightWallBluePixels: count(422, 94, 16, 32, (r, g, b) => b > r && b > g)
+    rightWallBluePixels: count(422, 94, 16, 32, (r, g, b) => b > r && b > g),
+    floorPrefixStrayPixels: count(186, 12, 8, 32, (r, g, b) => r > 180 && g > 180 && b > 180),
+    floorSuffixGapPixels: count(382, 12, 4, 32, (r, g, b) => r > 180 && g > 180 && b > 120),
+    difficultyLeftStrayPixels: count(500, 113, 28, 13, (r, g, b) => r > 160 && g > 160 && b > 160)
   };
 });
 if (nativePixelAudit.texturedPixels < 500 ||
     nativePixelAudit.ceilingBrightPixels < 500 ||
     nativePixelAudit.leftWallBluePixels < 100 ||
-    nativePixelAudit.rightWallBluePixels < 100) {
+    nativePixelAudit.rightWallBluePixels < 100 ||
+    nativePixelAudit.floorPrefixStrayPixels > 4 ||
+    nativePixelAudit.floorSuffixGapPixels > 4 ||
+    nativePixelAudit.difficultyLeftStrayPixels > 4) {
   throw new Error(`Native playfield art is cropped or missing: ${JSON.stringify(nativePixelAudit)}`);
 }
 
@@ -316,6 +325,64 @@ state = await capture("09-two-player");
 if (state.players.length !== 2 || state.players[1].x <= 224) {
   throw new Error(`2P movement failed: ${JSON.stringify(state.players)}`);
 }
+
+await page.evaluate(() => {
+  window.__nsShaftQa.setPlatforms([]);
+  window.__nsShaftQa.setPlayer(0, {
+    x: 190, y: 260, vx: 0, vy: 0, standingPlatformId: null,
+    standingPlayerId: null, facing: "right"
+  });
+  window.__nsShaftQa.setPlayer(1, {
+    x: 216, y: 260, vx: 0, vy: 0, standingPlatformId: null,
+    standingPlayerId: null, facing: "left"
+  });
+});
+await page.keyboard.down("ArrowRight");
+await page.keyboard.down("KeyZ");
+await page.waitForTimeout(100);
+await page.keyboard.up("ArrowRight");
+await page.keyboard.up("KeyZ");
+state = await capture("09b-two-player-blocks-overlap");
+if (state.players[1].x - state.players[0].x < state.players[0].width) {
+  throw new Error(`2P players overlapped: ${JSON.stringify(state.players)}`);
+}
+
+await page.evaluate(() => {
+  window.__nsShaftQa.setPlatforms([]);
+  window.__nsShaftQa.setPlayer(0, {
+    x: 160, y: 260, vx: 0, vy: 0, standingPlatformId: null,
+    standingPlayerId: null, facing: "right"
+  });
+  window.__nsShaftQa.setPlayer(1, {
+    x: 160, y: 232, vx: 0, vy: 0.2, standingPlatformId: null,
+    standingPlayerId: null, facing: "left"
+  });
+  window.advanceTime(40);
+});
+state = await capture("09c-two-player-head-stand");
+if (state.players[1].standingPlayerId !== state.players[0].id ||
+    Math.abs(state.players[1].y - (state.players[0].y - state.players[0].height)) > 0.01) {
+  throw new Error(`2P head standing failed: ${JSON.stringify(state.players)}`);
+}
+
+await page.evaluate(() => {
+  window.__nsShaftQa.setPlatforms([]);
+  window.__nsShaftQa.setPlayer(0, {
+    x: 80, y: 220, vx: 0, vy: 0.2, standingPlatformId: null,
+    standingPlayerId: null, facing: "left"
+  });
+  window.__nsShaftQa.setPlayer(1, {
+    x: 130, y: 220, vx: 0, vy: 0.2, standingPlatformId: null,
+    standingPlayerId: null, facing: "left",
+    pose: "hurt", hurtUntilMs: JSON.parse(window.render_game_to_text()).timeMs + 1000
+  });
+  window.advanceTime(20);
+});
+state = await capture("09d-two-player-fall-facing-left");
+if (state.players.some((player) => player.facing !== "left")) {
+  throw new Error(`Falling/hurt facing changed unexpectedly: ${JSON.stringify(state.players)}`);
+}
+
 await page.getByRole("button", { name: "中止遊戲" }).click();
 state = await capture("10-abort-to-title");
 if (state.ui !== "title") throw new Error(`Abort failed: ${state.ui}`);

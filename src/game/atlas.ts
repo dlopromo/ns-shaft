@@ -44,8 +44,8 @@ const object = (
 });
 
 export const SPRITE_ATLAS = {
-  image: "/assets/web/rt_bitmap-101-1041.png",
-  nativeImage: "/assets/web/sprites-native.png",
+  image: `${import.meta.env.BASE_URL}assets/web/rt_bitmap-101-1041.png`,
+  nativeImage: `${import.meta.env.BASE_URL}assets/web/sprites-native.png`,
   players: {
     yellow: Array.from({ length: 20 }, (_, index) =>
       character(
@@ -109,9 +109,9 @@ export const SPRITE_ATLAS = {
   ceiling: sprite(0, 368, 384, 16),
   pause: sprite(0, 320, 128, 40, "ui"),
   floorPrefix: sprite(128, 320, 64, 32, "ui"),
-  floorSuffix: sprite(192, 320, 32, 32, "ui"),
+  floorSuffix: sprite(192, 320, 40, 32, "ui"),
   lifeLabel: sprite(224, 352, 48, 16, "ui"),
-  lifeBars: Array.from({ length: 11 }, (_, index) =>
+  lifeBars: Array.from({ length: 12 }, (_, index) =>
     sprite(384, index * 16, 96, 16, "ui")
   ),
   gameOver: sprite(128, 352, 96, 16, "ui"),
@@ -119,9 +119,9 @@ export const SPRITE_ATLAS = {
     sprite(480, index * 32, 32, 32, "ui")
   ),
   difficultyLabels: [
-    sprite(0, 384, 96, 16, "ui"),
-    sprite(96, 384, 96, 16, "ui"),
-    sprite(192, 384, 96, 16, "ui")
+    sprite(40, 385, 58, 13, "ui"),
+    sprite(155, 385, 43, 13, "ui"),
+    sprite(224, 385, 74, 13, "ui")
   ],
   smallDigits: [
     sprite(272, 224, 16, 13, "ui"),

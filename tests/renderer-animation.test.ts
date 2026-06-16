@@ -11,9 +11,9 @@ describe("native platform animation timing", () => {
       .toEqual([5, 4, 3, 2, 1, 0]);
   });
 
-  test("plays six grey rotating images then returns to the first as step seven", () => {
-    expect([0, 86, 172, 258, 344, 430, 599].map(rotatingFrameIndex))
-      .toEqual([0, 1, 2, 3, 4, 5, 0]);
+  test("shows visible rotation immediately after the 500ms hold", () => {
+    expect([0, 120, 240, 360, 480, 599].map(rotatingFrameIndex))
+      .toEqual([1, 2, 3, 4, 5, 0]);
     expect(rotatingFrameIndex(600)).toBe(0);
   });
 

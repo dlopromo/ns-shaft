@@ -2,17 +2,17 @@ import type { GameEvent, GameEventType } from "./types";
 import { Midi } from "@tonejs/midi";
 
 export const AUDIO_MANIFEST = {
-  music: "/assets/BGM.MID",
+  music: `${import.meta.env.BASE_URL}assets/BGM.MID`,
   effects: {
-    land: "/assets/extracted/wave-107-1041.bin",
-    heal: "/assets/extracted/wave-108-1041.bin",
-    hurt: "/assets/extracted/wave-109-1041.bin",
-    spring: "/assets/extracted/wave-110-1041.bin",
-    conveyor: "/assets/extracted/wave-111-1041.bin",
-    rotate: "/assets/extracted/wave-112-1041.bin",
-    ceiling: "/assets/extracted/wave-113-1041.bin",
-    death: "/assets/extracted/wave-114-1041.bin",
-    pause: "/assets/extracted/wave-115-1041.bin"
+    land: `${import.meta.env.BASE_URL}assets/extracted/wave-107-1041.bin`,
+    heal: `${import.meta.env.BASE_URL}assets/extracted/wave-108-1041.bin`,
+    hurt: `${import.meta.env.BASE_URL}assets/extracted/wave-109-1041.bin`,
+    spring: `${import.meta.env.BASE_URL}assets/extracted/wave-110-1041.bin`,
+    conveyor: `${import.meta.env.BASE_URL}assets/extracted/wave-111-1041.bin`,
+    rotate: `${import.meta.env.BASE_URL}assets/extracted/wave-112-1041.bin`,
+    ceiling: `${import.meta.env.BASE_URL}assets/extracted/wave-113-1041.bin`,
+    death: `${import.meta.env.BASE_URL}assets/extracted/wave-114-1041.bin`,
+    pause: `${import.meta.env.BASE_URL}assets/extracted/wave-115-1041.bin`
   } satisfies Record<GameEventType, string>
 };
 

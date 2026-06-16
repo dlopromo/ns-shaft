@@ -92,11 +92,16 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   Restored the full native rock-texture playfield, both 16px side walls and the
   complete 384x16 ceiling-spike strip instead of the previous cropped 288x8 row.
 - Replaced the hand-drawn/scaled HUD with bitmap-101 assets at measured native
-  positions: 11 LIFE states, unscaled four-digit floor count, difficulty label
+  positions: 12 LIFE states, unscaled four-digit floor count, difficulty label
   and variable-height small record digits. The sidebar now tracks the selected
   difficulty's saved record rather than the current run's floor.
 - Added browser pixel audits for the texture, left/right walls and full ceiling
   spikes alongside the existing interaction and native-size screenshots.
+- Corrected the final HUD alignment against the 1.3J reference canvas and the
+  YouTube gameplay capture: LIFE now has 12 states, the top `階` suffix is
+  shifted clear of the fourth large digit, hard difficulty no longer includes
+  a stray `う` from the neighboring packed label, and browser QA now guards the
+  suffix gap plus difficulty-label stray pixels.
 
 ## Remaining
 

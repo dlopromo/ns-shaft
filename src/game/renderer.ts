@@ -12,7 +12,7 @@ export function springFrameIndex(ageMs: number): number {
 
 export function rotatingFrameIndex(ageMs: number): number {
   if (ageMs >= 600) return 0;
-  const step = Math.floor(Math.max(0, ageMs) / (600 / 7));
+  const step = Math.floor(Math.max(0, ageMs) / (600 / 6)) + 1;
   return step < 6 ? step : 0;
 }
 
@@ -44,8 +44,8 @@ export class Renderer {
     }
     this.main.src = SPRITE_ATLAS.image;
     this.native.src = SPRITE_ATLAS.nativeImage;
-    this.background.src = "/assets/web/rt_bitmap-102-1041.png";
-    this.frame.src = "/assets/web/rt_bitmap-106-1041.png";
+    this.background.src = `${import.meta.env.BASE_URL}assets/web/rt_bitmap-102-1041.png`;
+    this.frame.src = `${import.meta.env.BASE_URL}assets/web/rt_bitmap-106-1041.png`;
   }
 
   configure(options: { fast: boolean; recordFloor?: number }): void {
@@ -175,7 +175,8 @@ export class Renderer {
     if (!this.main.complete) return;
     const layout = GAME_LAYOUT.hud;
     this.drawSpriteAt(SPRITE_ATLAS.lifeLabel, layout.lifeLabel.x, layout.lifeLabel.y);
-    const health = Math.max(0, Math.min(10, state.players[0]?.health ?? 0));
+    const maxHealth = SPRITE_ATLAS.lifeBars.length - 1;
+    const health = Math.max(0, Math.min(maxHealth, state.players[0]?.health ?? 0));
     this.drawSpriteAt(SPRITE_ATLAS.lifeBars[health], layout.lifeBar.x, layout.lifeBar.y);
     this.drawSpriteAt(SPRITE_ATLAS.floorPrefix, layout.floorPrefix.x, layout.floorPrefix.y);
     const value = String(state.floor).padStart(4, "0").slice(-4);
@@ -193,9 +194,10 @@ export class Renderer {
     if (!this.main.complete) return;
     const difficultyIndex = { easy: 0, normal: 1, hard: 2 }[state.difficulty];
     const difficulty = GAME_LAYOUT.sidebar.difficultyValue;
+    const difficultySprite = SPRITE_ATLAS.difficultyLabels[difficultyIndex];
     this.drawSpriteAt(
-      SPRITE_ATLAS.difficultyLabels[difficultyIndex],
-      difficulty.x,
+      difficultySprite,
+      difficulty.right - difficultySprite.width,
       difficulty.y
     );
 

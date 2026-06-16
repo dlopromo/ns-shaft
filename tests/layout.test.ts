@@ -31,9 +31,9 @@ describe("Windows 1.3J native layout", () => {
       lifeBar: { x: 46, y: 28 },
       floorPrefix: { x: 194, y: 12 },
       floorDigits: { x: 262, y: 12, step: 30 },
-      floorSuffix: { x: 374, y: 12 }
+      floorSuffix: { x: 378, y: 12 }
     });
-    expect(GAME_LAYOUT.sidebar.difficultyValue).toEqual({ x: 506, y: 112 });
+    expect(GAME_LAYOUT.sidebar.difficultyValue).toEqual({ right: 609, y: 113 });
     expect(GAME_LAYOUT.sidebar.recordDigits).toEqual({
       x: 541, baselineY: 174, step: 13
     });

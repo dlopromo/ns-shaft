@@ -40,7 +40,7 @@ Macintosh emulation.
 | Maximum substep | iPel-aligned | 20 ms |
 | Native frame | Confirmed resource | 634 x 436 |
 | Playfield | Measured in resource 106 | 420 x 356 at (22, 62) |
-| Maximum health | iPel-aligned | 10 |
+| Maximum health | Windows screenshot aligned | 12 |
 | Normal landing heal | iPel-aligned | +1 |
 | Spike landing damage | Confirmed behavior | -5 |
 | Horizontal control | iPel-aligned | 0.2 px/ms |
@@ -63,9 +63,9 @@ Macintosh emulation.
 
 The gameplay renderer uses the Windows assets at their original pixel dimensions:
 
-- LIFE label at `(71,12)` and the 11 native 96 x 16 health-bar states at `(46,28)`.
+- LIFE label at `(71,12)` and the 12 native 96 x 16 health-bar states at `(46,28)`.
 - Floor prefix at `(194,12)`, four unscaled 32 x 32 digits from `(262,12)`,
-  and the floor suffix at `(374,12)`.
+  and the floor suffix at `(378,12)`.
 - The 128 x 128 rock texture tiles across the complete 420 x 356 playfield.
 - The 16 x 32 wall tile repeats at playfield-local `x=0` and `x=400`.
 - The complete 384 x 16 ceiling-spike strip draws once at local `(16,0)`.
@@ -73,7 +73,9 @@ The gameplay renderer uses the Windows assets at their original pixel dimensions
   browser fonts are not used inside the gameplay cabinet.
 
 These positions were measured against the Windows 1.3J reference screenshot and
-cross-checked with the 1.2J gameplay recording.
+cross-checked with the 1.2J gameplay recording. The difficulty labels are tight
+right-aligned crops from the packed row in bitmap 101, because wider crops include
+neighboring Japanese text fragments.
 
 ## Packed Sprite Segmentation
 

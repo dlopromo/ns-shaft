@@ -21,7 +21,8 @@ describe("iPel-aligned millisecond simulation", () => {
       platformGap: 60,
       platformCollisionHeight: 12,
       playerCollisionSize: 26,
-      spikeDamage: 5
+      spikeDamage: 5,
+      maxHealth: 12
     });
   });
 
@@ -127,11 +128,14 @@ describe("iPel-aligned millisecond simulation", () => {
 
   test("matches iPel life changes", () => {
     const game = new GameSimulation({ seed: 46, difficulty: "hard", players: 1 });
-    game.debugSetPlayer(0, { health: 10 });
+    game.debugSetPlayer(0, { health: 12 });
     game.debugResolveLanding(0, "spike");
-    expect(game.snapshot().players[0].health).toBe(5);
+    expect(game.snapshot().players[0].health).toBe(7);
     game.debugResolveLanding(0, "normal");
-    expect(game.snapshot().players[0].health).toBe(6);
+    expect(game.snapshot().players[0].health).toBe(8);
+    game.debugSetPlayer(0, { health: 12 });
+    game.debugResolveLanding(0, "normal");
+    expect(game.snapshot().players[0].health).toBe(12);
   });
 
   test("detects landing against a platform moving upward during the same substep", () => {

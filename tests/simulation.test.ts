@@ -12,6 +12,8 @@ describe("GameSimulation gameplay rules", () => {
   test("starts above a centered normal floor with a queued floor below the viewport", () => {
     const game = new GameSimulation({ seed: 21, difficulty: "normal", players: 2 });
     const state = game.snapshot();
+    expect(state.players.map((player) => player.health)).toEqual([12, 12]);
+    expect(state.players.map((player) => player.standingPlayerId)).toEqual([null, null]);
     const startFloor = state.platforms.find((platform) =>
       platform.kind === "normal" &&
       platform.x === (420 - IPEL_PHYSICS.platformWidth) / 2 &&
@@ -60,6 +62,64 @@ describe("GameSimulation gameplay rules", () => {
     expect(game.snapshot().players[0].facing).toBe("left");
     game.debugResolveLanding(0, "spike");
     expect(game.snapshot().players[0].hurtUntilMs).toBe(1020);
+    expect(game.snapshot().players[0]).toMatchObject({
+      pose: "hurt",
+      facing: "left"
+    });
+  });
+
+  test("preserves both players' facing while falling after moving left", () => {
+    const game = new GameSimulation({ seed: 61, difficulty: "normal", players: 2 });
+    game.debugSetPlatforms([{
+      id: 1, x: 80, y: 260, width: 96, kind: "normal",
+      variant: "normal", direction: 1, phase: 0, collidable: true
+    }]);
+    game.debugSetPlayer(0, { x: 120, y: 260, standingPlatformId: 1, facing: "left" });
+    game.debugSetPlayer(1, { x: 140, y: 260, standingPlatformId: 1, facing: "left" });
+
+    game.step({
+      players: [{ left: true, right: false }, { left: true, right: false }],
+      pausePressed: false
+    }, 20);
+    game.debugSetPlayer(0, { x: 20, vy: 0.2, standingPlatformId: null });
+    game.debugSetPlayer(1, { x: 30, vy: 0.2, standingPlatformId: null });
+    game.step(idle, 20);
+
+    expect(game.snapshot().players.map((player) => ({
+      pose: player.pose,
+      facing: player.facing
+    }))).toEqual([
+      { pose: "fall", facing: "left" },
+      { pose: "fall", facing: "left" }
+    ]);
+  });
+
+  test("two players block horizontal overlap", () => {
+    const game = new GameSimulation({ seed: 62, difficulty: "normal", players: 2 });
+    game.debugSetPlatforms([]);
+    game.debugSetPlayer(0, { x: 190, y: 260, vy: 0, facing: "right" });
+    game.debugSetPlayer(1, { x: 216, y: 260, vy: 0, facing: "left" });
+
+    game.step({
+      players: [{ left: false, right: true }, { left: true, right: false }],
+      pausePressed: false
+    }, 100);
+
+    const [first, second] = game.snapshot().players;
+    expect(second.x - first.x).toBeGreaterThanOrEqual(first.width);
+  });
+
+  test("falling player can land on the other player's head", () => {
+    const game = new GameSimulation({ seed: 63, difficulty: "normal", players: 2 });
+    game.debugSetPlatforms([]);
+    game.debugSetPlayer(0, { x: 160, y: 260, vy: 0, standingPlatformId: null });
+    game.debugSetPlayer(1, { x: 160, y: 232, vy: 0.2, standingPlatformId: null });
+
+    game.step(idle, 40);
+
+    const [lower, upper] = game.snapshot().players;
+    expect(upper.y).toBeCloseTo(lower.y - lower.height);
+    expect(upper.standingPlayerId).toBe(lower.id);
   });
 
   test("uses a walking pose while moving left or right on a floor", () => {
@@ -89,15 +149,15 @@ describe("GameSimulation gameplay rules", () => {
     });
   });
 
-  test("generates the full iPel horizontal range", () => {
+  test("generates only fully visible platforms", () => {
     const game = new GameSimulation({ seed: 13, difficulty: "hard", players: 1 });
     for (let elapsed = 0; elapsed < 120_000; elapsed += 20) {
-      game.debugSetPlayer(0, { alive: true, health: 10, y: 180, vy: 0 });
+      game.debugSetPlayer(0, { alive: true, health: 12, y: 180, vy: 0 });
       game.step(idle, 20);
     }
     const xs = game.snapshot().platforms.map((platform) => platform.x);
-    expect(Math.min(...xs)).toBeGreaterThanOrEqual(-48);
-    expect(Math.max(...xs)).toBeLessThanOrEqual(420);
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...xs)).toBeLessThanOrEqual(420 - IPEL_PHYSICS.platformWidth);
   });
 
   test("lands only while crossing a platform top", () => {

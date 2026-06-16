@@ -35,6 +35,7 @@ export interface PlayerState {
   facing: "left" | "right";
   invulnerableTicks: number;
   standingPlatformId: number | null;
+  standingPlayerId: number | null;
   onPlatformSince: number | null;
   hurtUntilTick: number;
   hurtUntilMs: number;

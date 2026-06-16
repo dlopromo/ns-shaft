@@ -7,13 +7,13 @@ export const GAME_LAYOUT = {
     lifeBar: { x: 46, y: 28 },
     floorPrefix: { x: 194, y: 12 },
     floorDigits: { x: 262, y: 12, step: 30 },
-    floorSuffix: { x: 374, y: 12 }
+    floorSuffix: { x: 378, y: 12 }
   },
   sidebar: {
     x: 447,
     width: 181,
     difficulty: { x: 464, y: 94 },
-    difficultyValue: { x: 506, y: 112 },
+    difficultyValue: { right: 609, y: 113 },
     record: { x: 464, y: 146 },
     recordDigits: { x: 541, baselineY: 174, step: 13 },
     pause: { x: 512, y: 306, width: 48, height: 46 },

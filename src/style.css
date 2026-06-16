@@ -6,8 +6,19 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #app { width: 100%; min-width: 634px; min-height: 100%; margin: 0; }
-body { display: grid; place-items: center; min-height: 100vh; background: #111; }
+html, body, #app { width: 100%; min-width: 0; min-height: 100%; margin: 0; }
+body {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  overflow: auto;
+  background: #111;
+}
+#app {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
 button, select, input { font: inherit; }
 button {
   color: #000;
@@ -18,7 +29,19 @@ button {
 }
 button:active { border-style: inset; }
 button:focus-visible { outline: 1px dotted #000; outline-offset: -5px; }
-.cabinet, .game-frame { width: 634px; height: 436px; }
+.cabinet {
+  --game-scale: 1;
+  display: grid;
+  place-items: center;
+  width: calc(634px * var(--game-scale));
+  height: calc(436px * var(--game-scale));
+}
+.game-frame {
+  width: 634px;
+  height: 436px;
+  transform: scale(var(--game-scale));
+  transform-origin: center;
+}
 .game-frame {
   position: relative;
   overflow: hidden;
@@ -51,6 +74,7 @@ canvas {
   --game-scale: 1;
   width: 100vw;
   height: 100vh;
+  transform: none;
   background: #000;
 }
 .game-frame:fullscreen canvas,
