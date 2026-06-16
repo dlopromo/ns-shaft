@@ -24,7 +24,7 @@ describe("original Windows sprite atlas", () => {
         );
         expect(sprite.anchor).toEqual({ x: 16, y: 32 });
         expect(sprite.collision).toEqual({ x: 3, y: 6, width: 26, height: 26 });
-        expect(sprite.mirrorX).toBe(false);
+        expect(sprite.mirrorX).toBe(index >= 4 && index <= 7);
         expect(sprite.width).toBe(32);
         expect(sprite.height).toBe(32);
       }

@@ -113,7 +113,7 @@ export class Renderer {
     const x = Math.round(player.x - sprite.anchor.x);
     const y = Math.round(player.y - sprite.anchor.y);
     this.ctx.save();
-    if (playerNeedsMirror(player.facing)) {
+    if (playerNeedsMirror(player.facing) !== sprite.mirrorX) {
       this.ctx.translate(Math.round(player.x) * 2, 0);
       this.ctx.scale(-1, 1);
     }
@@ -175,9 +175,19 @@ export class Renderer {
     if (!this.native.complete) return;
     const layout = GAME_LAYOUT.hud;
     this.drawSpriteAt(SPRITE_ATLAS.lifeLabel, layout.lifeLabel.x, layout.lifeLabel.y);
-    const maxHealth = SPRITE_ATLAS.lifeBars.length - 1;
-    const health = Math.max(0, Math.min(maxHealth, state.players[0]?.health ?? 0));
-    this.drawSpriteAt(SPRITE_ATLAS.lifeBars[health], layout.lifeBar.x, layout.lifeBar.y);
+    const health = state.players[0]?.health ?? 0;
+    const barIndex = Math.max(0, Math.min(
+      SPRITE_ATLAS.lifeBars.length - 1,
+      health
+    ));
+    this.drawSpriteAt(SPRITE_ATLAS.lifeBars[barIndex], layout.lifeBar.x, layout.lifeBar.y);
+    if (health >= 12) {
+      this.ctx.drawImage(
+        this.native,
+        384 + 80, 176, 8, 16,
+        layout.lifeBar.x + 88, layout.lifeBar.y, 8, 16
+      );
+    }
     for (let index = 0; index < SPRITE_ATLAS.floorPrefixParts.length; index += 1) {
       this.drawSpriteAt(
         SPRITE_ATLAS.floorPrefixParts[index],

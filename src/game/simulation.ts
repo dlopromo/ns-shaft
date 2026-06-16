@@ -332,6 +332,7 @@ export class GameSimulation {
   }
 
   private triggerPlatform(platform: PlatformState): void {
+    if (platform.activationState !== "active") return;
     platform.activationState = "triggered";
     platform.activationAgeMs = 0;
     platform.ageTicks = 0;
@@ -427,7 +428,10 @@ export class GameSimulation {
   }
 
   private randomPlatformX(): number {
-    return Math.round(this.random.next() * (WIDTH - IPEL_PHYSICS.platformWidth));
+    const wallW = 16;
+    return wallW + Math.round(
+      this.random.next() * (WIDTH - IPEL_PHYSICS.platformWidth - wallW * 2)
+    );
   }
 
   private pickVariant(): PlatformVariant {

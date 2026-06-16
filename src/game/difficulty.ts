@@ -20,16 +20,16 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyProfile> = {
   easy: {
     basePlatformVelocity: -0.06,
     platformGap: 60,
-    weights: weights(0.7, 0.06, 0.06, 0.06, 0.06, 0.06)
+    weights: weights(0.6, 0.11, 0.11, 0.11, 0.11, 0.11)
   },
   normal: {
     basePlatformVelocity: -0.08,
     platformGap: 60,
-    weights: weights(0.6, 0.08, 0.08, 0.08, 0.08, 0.08)
+    weights: weights(0.5, 0.13, 0.13, 0.13, 0.13, 0.13)
   },
   hard: {
     basePlatformVelocity: -0.1,
     platformGap: 60,
-    weights: weights(0.5, 0.1, 0.1, 0.1, 0.1, 0.1)
+    weights: weights(0.4, 0.15, 0.15, 0.15, 0.15, 0.15)
   }
 };

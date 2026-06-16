@@ -10,7 +10,7 @@ export interface SpriteDefinition {
   usage?: "stand" | "walk" | "fall" | "hurt" | "dead" | "platform" | "ui";
 }
 
-const character = (x: number, y: number, usage: SpriteDefinition["usage"]): SpriteDefinition => ({
+const character = (x: number, y: number, usage: SpriteDefinition["usage"], mirrorX = false): SpriteDefinition => ({
   source: "native",
   x,
   y,
@@ -18,7 +18,7 @@ const character = (x: number, y: number, usage: SpriteDefinition["usage"]): Spri
   height: 32,
   anchor: { x: 16, y: 32 },
   collision: { x: 3, y: 6, width: 26, height: 26 },
-  mirrorX: false,
+  mirrorX,
   usage
 });
 
@@ -61,23 +61,27 @@ export const SPRITE_ATLAS = {
       character(
         (index % 4) * 32,
         Math.floor(index / 4) * 32,
-        index < 4 ? "walk" : index < 16 ? "fall" : "dead"
+        index < 4 ? "walk" : index < 16 ? "fall" : "dead",
+        index >= 4 && index <= 7
       )
     ),
     green: Array.from({ length: 20 }, (_, index) =>
       character(
         (index % 4) * 32,
         160 + Math.floor(index / 4) * 32,
-        index < 4 ? "walk" : index < 16 ? "fall" : "dead"
+        index < 4 ? "walk" : index < 16 ? "fall" : "dead",
+        index >= 4 && index <= 7
       )
     )
   },
   hurtPlayers: {
     yellow: Array.from({ length: 20 }, (_, index) =>
-      character(128 + (index % 4) * 32, Math.floor(index / 4) * 32, "hurt")
+      character(128 + (index % 4) * 32, Math.floor(index / 4) * 32, "hurt",
+        index >= 4 && index <= 7)
     ),
     green: Array.from({ length: 20 }, (_, index) =>
-      character(128 + (index % 4) * 32, 160 + Math.floor(index / 4) * 32, "hurt")
+      character(128 + (index % 4) * 32, 160 + Math.floor(index / 4) * 32, "hurt",
+        index >= 4 && index <= 7)
     )
   },
   playerAnimations: {
