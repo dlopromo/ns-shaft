@@ -5,16 +5,16 @@ import {
 
 describe("native platform animation timing", () => {
   test("compresses through seven spring frames then rebounds to the first", () => {
-    expect([0, 29, 58, 87, 116, 145, 199].map(springFrameIndex))
+    expect([0, 23, 46, 69, 92, 115, 159].map(springFrameIndex))
       .toEqual([0, 1, 2, 3, 4, 5, 6]);
-    expect([200, 220, 240, 260, 280, 299].map(springFrameIndex))
+    expect([160, 176, 192, 208, 224, 239].map(springFrameIndex))
       .toEqual([5, 4, 3, 2, 1, 0]);
   });
 
-  test("shows visible rotation immediately after the 200ms hold", () => {
-    expect([0, 50, 100, 150, 200, 250, 299].map(rotatingFrameIndex))
+  test("shows visible rotation immediately after the 150ms hold", () => {
+    expect([0, 40, 80, 120, 160, 200, 239].map(rotatingFrameIndex))
       .toEqual([1, 2, 3, 4, 5, 0, 0]);
-    expect(rotatingFrameIndex(300)).toBe(0);
+    expect(rotatingFrameIndex(240)).toBe(0);
   });
 
   test("mirrors the native left-facing character only when moving right", () => {

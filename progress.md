@@ -73,15 +73,15 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   y=80/96/112/128. The renderer no longer mirrors or reverses one shared
   sequence. Browser QA confirms x=120 becomes 130 on right and 110 on left.
 - Implemented the full seven-frame spring interaction: frames 0 through 6
-  compress over 200ms while the player remains attached, frame 6 launches the
-  player, then frames 5 through 0 rebound over 100ms. QA captures both the
+  compress over 160ms while the player remains attached, frame 6 launches the
+  player, then frames 5 through 0 rebound over 80ms. QA captures both the
   compressed and rebound states.
 - Corrected the rotating floor to use only its six grey source images. The
   seventh animation step returns to the first grey image; the blue normal
   floor is not part of this sequence. Its first crop is the complete original
   96x16 image at y=154, rather than the truncated 96x10 crop at y=160.
-  Touching it keeps collision for 200ms before dropping the player; the
-  following 300ms roll then restores the first frame and collision.
+  Touching it keeps collision for 150ms before dropping the player; the
+  following 240ms roll then restores the first frame and collision.
 - Added renderer timing, collision-state and browser QA coverage for the
   rotating floor's drop, final frame and reset states. Native-size screenshots
   are `05d`, `05dd` and `05de` under `artifacts/qa/current/`.
@@ -118,11 +118,15 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   `wave-107`; hurt uses `wave-110`; spring uses `wave-109`; rotate uses
   `wave-111`; ceiling also uses the hurt sound `wave-110`; death uses
   `wave-113`; pause uses `wave-114`; and the new abort event uses `wave-115`.
-  Heal remains `wave-108`; conveyor temporarily uses `wave-112`.
+  Heal remains `wave-108`; conveyor now uses the same `wave-107` as land.
+- Drew walls and ceiling before players so characters are always visible above
+  gameplay blockers, changed the unloaded background fallback from black to
+  blue, and lowered spring launch velocity to prevent returning to the previous
+  60px platform row.
 
 ## Remaining
 
 - Measure provisional physics constants in original-system emulation.
 - Compare provisional animation timing against original-system frame capture.
-- Confirm whether conveyor should keep its temporary mapping after the first
-  audio remap.
+- Re-check spring and rotating timing against original video after the faster
+  feel adjustment.

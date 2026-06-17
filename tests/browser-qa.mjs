@@ -48,6 +48,8 @@ const soundPreviewRows = await page.locator("[data-sound-preview]").evaluateAll(
   }))
 );
 if (soundPreviewRows.length !== 10 ||
+    soundPreviewRows[4].event !== "conveyor" ||
+    !soundPreviewRows[4].text?.includes("wave-107") ||
     soundPreviewRows[5].event !== "rotate" ||
     !soundPreviewRows[5].text?.includes("wave-111") ||
     soundPreviewRows[9].event !== "abort" ||
@@ -111,7 +113,7 @@ await page.evaluate(() => {
       direction: -1, phase: 0, collidable: true, activationState: "active" },
     { id: 3, x: 244, y: 200, width: 96, kind: "rotating", variant: "disappearing",
       direction: 1, phase: 0, collidable: true, activationState: "disappearing",
-      activationAgeMs: 430, height: 6 },
+      activationAgeMs: 350, height: 6 },
     { id: 4, x: 80, y: 260, width: 96, kind: "spring", variant: "spring",
       direction: 1, phase: 0, collidable: true, activationState: "triggered",
       activationAgeMs: 120 },
@@ -271,7 +273,7 @@ await page.evaluate(() => {
     {
       id: 21, x: 80, y: 260, width: 96, kind: "rotating",
       variant: "disappearing", direction: 1, phase: 0, collidable: true,
-      activationState: "triggered", activationAgeMs: 180, height: 12
+      activationState: "triggered", activationAgeMs: 130, height: 12
     },
     {
       id: 24, x: 80, y: 350, width: 96, kind: "normal",
@@ -289,7 +291,7 @@ state = await capture("05dc-rotating-delay-ended");
 if (state.players[0].standingPlatformId !== null ||
     state.platforms[0].collidable ||
     state.platforms[0].activationState !== "disappearing") {
-  throw new Error(`Rotating block did not drop after 200ms: ${JSON.stringify(state)}`);
+  throw new Error(`Rotating block did not drop after 150ms: ${JSON.stringify(state)}`);
 }
 
 await page.evaluate(() => {
@@ -297,7 +299,7 @@ await page.evaluate(() => {
     {
       id: 21, x: 80, y: 220, width: 96, kind: "rotating",
       variant: "disappearing", direction: 1, phase: 0, collidable: false,
-      activationState: "disappearing", activationAgeMs: 440, height: 0
+      activationState: "disappearing", activationAgeMs: 360, height: 0
     },
     {
       id: 24, x: 80, y: 350, width: 96, kind: "normal",
@@ -308,8 +310,8 @@ await page.evaluate(() => {
   window.advanceTime(1);
 });
 state = await capture("05dd-rotating-last-frame");
-if (state.platforms[0].activationAgeMs < 440 ||
-    state.platforms[0].activationAgeMs >= 500 ||
+if (state.platforms[0].activationAgeMs < 360 ||
+    state.platforms[0].activationAgeMs >= 390 ||
     state.platforms[0].activationState !== "disappearing") {
   throw new Error(`Rotating block skipped its last frame: ${JSON.stringify(state.platforms[0])}`);
 }

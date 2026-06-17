@@ -151,11 +151,11 @@ describe("GameSimulation gameplay rules", () => {
     });
   });
 
-  test("keeps the player collision box inside the blue side walls", () => {
+  test("keeps the full visible player sprite inside the blue side walls", () => {
     const game = new GameSimulation({ seed: 12, difficulty: "normal", players: 1 });
     const innerLeft = GAME_LAYOUT.playable.x;
     const innerRight = GAME_LAYOUT.playable.x + GAME_LAYOUT.playable.width;
-    const half = IPEL_PHYSICS.playerCollisionSize / 2;
+    const visibleHalf = 16;
 
     game.debugSetPlatforms([]);
     game.debugSetPlayer(0, {
@@ -165,7 +165,7 @@ describe("GameSimulation gameplay rules", () => {
       players: [{ left: true, right: false }, idle.players[1]],
       pausePressed: false
     }, 1000);
-    expect(game.snapshot().players[0].x).toBeGreaterThanOrEqual(innerLeft + half);
+    expect(game.snapshot().players[0].x).toBeGreaterThanOrEqual(innerLeft + visibleHalf);
 
     game.debugSetPlayer(0, {
       x: 380, y: 260, vy: 0, standingPlatformId: null
@@ -174,7 +174,7 @@ describe("GameSimulation gameplay rules", () => {
       players: [{ left: false, right: true }, idle.players[1]],
       pausePressed: false
     }, 1000);
-    expect(game.snapshot().players[0].x).toBeLessThanOrEqual(innerRight - half);
+    expect(game.snapshot().players[0].x).toBeLessThanOrEqual(innerRight - visibleHalf);
   });
 
   test("generates only fully visible platforms", () => {

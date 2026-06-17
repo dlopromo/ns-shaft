@@ -14,10 +14,10 @@ describe("iPel-aligned millisecond simulation", () => {
       gravity: 0.0015,
       controlVelocity: 0.2,
       conveyorVelocity: 0.1,
-      springVelocity: -0.5,
-      springCompressionMs: 100,
-      disappearingHoldMs: 200,
-      disappearingTurnMs: 300,
+      springVelocity: -0.35,
+      springCompressionMs: 80,
+      disappearingHoldMs: 150,
+      disappearingTurnMs: 240,
       platformGap: 60,
       platformCollisionHeight: 12,
       playerCollisionSize: 26,
@@ -56,7 +56,7 @@ describe("iPel-aligned millisecond simulation", () => {
       .toBeGreaterThanOrEqual(356);
   });
 
-  test("compresses a spring for 200ms before launch", () => {
+  test("compresses a spring for 160ms before launch", () => {
     const game = new GameSimulation({ seed: 44, difficulty: "hard", players: 1 });
     game.debugSetPlatforms([{
       id: 1, x: 80, y: 260, width: 96, kind: "spring",
@@ -66,14 +66,14 @@ describe("iPel-aligned millisecond simulation", () => {
     game.debugSetPlayer(0, {
       x: 120, y: 260, vy: 0, standingPlatformId: 1, onPlatformSince: 0
     });
-    game.step(idle, 199);
+    game.step(idle, 159);
     expect(game.snapshot().players[0].standingPlatformId).toBe(1);
     game.step(idle, 1);
     expect(game.snapshot().players[0].standingPlatformId).toBeNull();
-    expect(game.snapshot().players[0].vy).toBeCloseTo(-0.5);
+    expect(game.snapshot().players[0].vy).toBeCloseTo(-0.35);
   });
 
-  test("keeps the spring triggered during its 100ms rebound", () => {
+  test("keeps the spring triggered during its 80ms rebound", () => {
     const game = new GameSimulation({ seed: 440, difficulty: "hard", players: 1 });
     game.debugSetPlatforms([{
       id: 1, x: 80, y: 260, width: 96, kind: "spring",
@@ -83,13 +83,42 @@ describe("iPel-aligned millisecond simulation", () => {
     game.debugSetPlayer(0, {
       x: 120, y: 260, standingPlatformId: 1
     });
-    game.step(idle, 250);
+    game.step(idle, 220);
     expect(game.snapshot().platforms[0].activationState).toBe("triggered");
-    game.step(idle, 50);
+    game.step(idle, 20);
     expect(game.snapshot().platforms[0].activationState).toBe("active");
   });
 
-  test("holds the player for 200ms, then drops them for one roll and resets", () => {
+  test("does not launch the player back to the previous platform row", () => {
+    const game = new GameSimulation({ seed: 441, difficulty: "hard", players: 1 });
+    game.debugSetPlatforms([
+      {
+        id: 1, x: 80, y: 260, width: 96, kind: "spring",
+        variant: "spring", direction: 1, phase: 0, collidable: true,
+        activationState: "triggered"
+      },
+      {
+        id: 2, x: 80, y: 200, width: 96, kind: "normal",
+        variant: "normal", direction: 1, phase: 0, collidable: true
+      }
+    ]);
+    game.debugSetPlayer(0, {
+      x: 120, y: 260, standingPlatformId: 1
+    });
+    let closestGap = Number.POSITIVE_INFINITY;
+    for (let elapsed = 0; elapsed < 700; elapsed += 20) {
+      game.step(idle, 20);
+      const state = game.snapshot();
+      const player = state.players[0];
+      const previousRow = state.platforms.find((platform) => platform.id === 2)!;
+      closestGap = Math.min(closestGap, player.y - previousRow.y);
+      expect(player.y).toBeGreaterThan(previousRow.y);
+      expect(player.standingPlatformId).not.toBe(2);
+    }
+    expect(closestGap).toBeLessThan(IPEL_PHYSICS.platformGap);
+  });
+
+  test("holds the player for 150ms, then drops them for one roll and resets", () => {
     const game = new GameSimulation({ seed: 45, difficulty: "hard", players: 1 });
     game.debugSetPlatforms([
       {
@@ -110,15 +139,15 @@ describe("iPel-aligned millisecond simulation", () => {
     expect(game.snapshot().platforms[0]).toMatchObject({
       activationState: "triggered", collidable: true, activationAgeMs: 0
     });
-    game.step(idle, 199);
+    game.step(idle, 149);
     expect(game.snapshot().players[0].standingPlatformId).toBe(1);
     expect(game.snapshot().platforms[0].collidable).toBe(true);
     game.step(idle, 1);
     expect(game.snapshot().players[0].standingPlatformId).toBeNull();
     expect(game.snapshot().platforms[0]).toMatchObject({
-      activationState: "disappearing", collidable: false, activationAgeMs: 200
+      activationState: "disappearing", collidable: false, activationAgeMs: 150
     });
-    game.step(idle, 280);
+    game.step(idle, 220);
     expect(game.snapshot().platforms[0].activationState).toBe("disappearing");
     game.step(idle, 20);
     expect(game.snapshot().platforms[0]).toMatchObject({

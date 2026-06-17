@@ -11,10 +11,10 @@ export const IPEL_PHYSICS = {
   gravity: 0.0015,
   controlVelocity: 0.2,
   conveyorVelocity: 0.1,
-  springVelocity: -0.5,
-  springCompressionMs: 100,
-  disappearingHoldMs: 200,
-  disappearingTurnMs: 300,
+  springVelocity: -0.35,
+  springCompressionMs: 80,
+  disappearingHoldMs: 150,
+  disappearingTurnMs: 240,
   platformGap: 60,
   platformCollisionHeight: 12,
   playerCollisionSize: 26,
@@ -29,6 +29,7 @@ const WIDTH = GAME_LAYOUT.playfield.width;
 const HEIGHT = GAME_LAYOUT.playfield.height;
 const PLAYABLE_LEFT = GAME_LAYOUT.playable.x;
 const PLAYABLE_RIGHT = GAME_LAYOUT.playable.x + GAME_LAYOUT.playable.width;
+const PLAYER_RENDER_HALF_WIDTH = 16;
 const SPRING_LAUNCH_MS = IPEL_PHYSICS.springCompressionMs * 2;
 const ROTATING_CYCLE_MS =
   IPEL_PHYSICS.disappearingHoldMs + IPEL_PHYSICS.disappearingTurnMs;
@@ -541,8 +542,10 @@ export class GameSimulation {
   }
 
   private clampPlayerX(x: number): number {
-    const half = IPEL_PHYSICS.playerCollisionSize / 2;
-    return Math.max(PLAYABLE_LEFT + half, Math.min(PLAYABLE_RIGHT - half, x));
+    return Math.max(
+      PLAYABLE_LEFT + PLAYER_RENDER_HALF_WIDTH,
+      Math.min(PLAYABLE_RIGHT - PLAYER_RENDER_HALF_WIDTH, x)
+    );
   }
 
   debugSetPlatforms(platforms: DebugPlatform[]): void {

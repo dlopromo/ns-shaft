@@ -1,18 +1,25 @@
 import { SPRITE_ATLAS, type SpriteDefinition } from "./atlas";
 import { GAME_LAYOUT } from "./layout";
+import { IPEL_PHYSICS } from "./simulation";
 import type { GameStateSnapshot, PlatformState, PlayerState } from "./types";
 
 export const LOGICAL_WIDTH = GAME_LAYOUT.frame.width;
 export const LOGICAL_HEIGHT = GAME_LAYOUT.frame.height;
+const SPRING_LAUNCH_MS = IPEL_PHYSICS.springCompressionMs * 2;
+const SPRING_REBOUND_MS = IPEL_PHYSICS.springCompressionMs;
+const ROTATING_HOLD_MS = IPEL_PHYSICS.disappearingHoldMs;
+const ROTATING_TURN_MS = IPEL_PHYSICS.disappearingTurnMs;
 
 export function springFrameIndex(ageMs: number): number {
-  if (ageMs < 200) return Math.min(6, Math.floor(ageMs / (200 / 7)));
-  return Math.max(0, 5 - Math.floor((ageMs - 200) / (100 / 6)));
+  if (ageMs < SPRING_LAUNCH_MS) {
+    return Math.min(6, Math.floor(ageMs / (SPRING_LAUNCH_MS / 7)));
+  }
+  return Math.max(0, 5 - Math.floor((ageMs - SPRING_LAUNCH_MS) / (SPRING_REBOUND_MS / 6)));
 }
 
 export function rotatingFrameIndex(ageMs: number): number {
-  if (ageMs >= 300) return 0;
-  const step = Math.floor(Math.max(0, ageMs) / (300 / 6)) + 1;
+  if (ageMs >= ROTATING_TURN_MS) return 0;
+  const step = Math.floor(Math.max(0, ageMs) / (ROTATING_TURN_MS / 6)) + 1;
   return step < 6 ? step : 0;
 }
 
@@ -68,10 +75,10 @@ export class Renderer {
     this.ctx.clip();
     this.ctx.translate(viewport.x, viewport.y);
     this.drawBackground(state.cameraY);
-    for (const platform of state.platforms) this.drawPlatform(platform);
-    for (const player of state.players) this.drawPlayer(player, state.timeMs);
     this.drawWalls();
     this.drawCeiling();
+    for (const platform of state.platforms) this.drawPlatform(platform);
+    for (const player of state.players) this.drawPlayer(player, state.timeMs);
     if (state.mode === "paused") {
       this.drawSprite(SPRITE_ATLAS.pause, (viewport.width - 128) / 2, 150);
     }
@@ -86,7 +93,7 @@ export class Renderer {
 
   private drawBackground(cameraY: number): void {
     const { width, height } = GAME_LAYOUT.playfield;
-    this.ctx.fillStyle = "#000";
+    this.ctx.fillStyle = "#0020a0";
     this.ctx.fillRect(0, 0, width, height);
     if (this.fast || !this.background.complete) return;
     const offset = ((Math.floor(cameraY) % 128) + 128) % 128;
@@ -145,7 +152,7 @@ export class Renderer {
       const frames = SPRITE_ATLAS.platformAnimations.rotating;
       if (platform.activationState !== "disappearing") return frames[0];
       return frames[rotatingFrameIndex(
-        platform.activationAgeMs - 200
+        platform.activationAgeMs - ROTATING_HOLD_MS
       )];
     }
     if (platform.variant === "spring") {
