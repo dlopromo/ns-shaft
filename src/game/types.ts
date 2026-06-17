@@ -8,7 +8,7 @@ export type GameMode = "title" | "playing" | "paused" | "name-entry" | "records"
 export type PlayerPose = "stand" | "walk" | "jump" | "fall" | "hurt" | "dead";
 export type GameEventType =
   | "land" | "heal" | "hurt" | "spring" | "conveyor"
-  | "rotate" | "ceiling" | "death" | "pause";
+  | "rotate" | "ceiling" | "death" | "pause" | "abort";
 
 export interface PlayerInput {
   left: boolean;

@@ -2,30 +2,45 @@ import { describe, expect, test } from "vitest";
 import { AUDIO_EFFECTS, AUDIO_MANIFEST } from "../src/game/audio";
 
 describe("original audio manifest", () => {
-  test("maps all nine WAVE resources to game events", () => {
-    expect(Object.keys(AUDIO_MANIFEST.effects)).toHaveLength(9);
-    expect(new Set(Object.values(AUDIO_MANIFEST.effects))).toHaveLength(9);
+  test("maps previewed WAVE resources to game events", () => {
+    expect(Object.keys(AUDIO_MANIFEST.effects)).toHaveLength(10);
     expect(AUDIO_EFFECTS.map(({ event }) => event)).toEqual(Object.keys(AUDIO_MANIFEST.effects));
+    expect(Object.fromEntries(AUDIO_EFFECTS.map(({ event, resourceId }) =>
+      [event, resourceId]
+    ))).toEqual({
+      land: 107,
+      heal: 108,
+      hurt: 110,
+      spring: 109,
+      conveyor: 112,
+      rotate: 111,
+      ceiling: 113,
+      death: 113,
+      pause: 114,
+      abort: 115
+    });
   });
 
   test("retains the original MIDI as the music source", () => {
     expect(AUDIO_MANIFEST.music).toBe(`${import.meta.env.BASE_URL}assets/BGM.MID`);
   });
 
-  test("exposes each extracted WAVE resource for manual preview", () => {
-    expect(AUDIO_EFFECTS.map(({ resourceId, durationMs }) => ({
+  test("exposes each mapped event for manual preview", () => {
+    expect(AUDIO_EFFECTS.map(({ event, resourceId, durationMs }) => ({
+      event,
       resourceId,
       durationMs: Math.round(durationMs)
     }))).toEqual([
-      { resourceId: 107, durationMs: 272 },
-      { resourceId: 108, durationMs: 320 },
-      { resourceId: 109, durationMs: 439 },
-      { resourceId: 110, durationMs: 442 },
-      { resourceId: 111, durationMs: 1083 },
-      { resourceId: 112, durationMs: 1775 },
-      { resourceId: 113, durationMs: 1812 },
-      { resourceId: 114, durationMs: 802 },
-      { resourceId: 115, durationMs: 1380 }
+      { event: "land", resourceId: 107, durationMs: 272 },
+      { event: "heal", resourceId: 108, durationMs: 320 },
+      { event: "hurt", resourceId: 110, durationMs: 442 },
+      { event: "spring", resourceId: 109, durationMs: 439 },
+      { event: "conveyor", resourceId: 112, durationMs: 1775 },
+      { event: "rotate", resourceId: 111, durationMs: 1083 },
+      { event: "ceiling", resourceId: 113, durationMs: 1812 },
+      { event: "death", resourceId: 113, durationMs: 1812 },
+      { event: "pause", resourceId: 114, durationMs: 802 },
+      { event: "abort", resourceId: 115, durationMs: 1380 }
     ]);
   });
 });

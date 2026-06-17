@@ -1,17 +1,39 @@
 import type { GameEvent, GameEventType } from "./types";
 import { Midi } from "@tonejs/midi";
 
-export const AUDIO_EFFECTS = [
-  { event: "land", resourceId: 107, durationMs: 271.7 },
-  { event: "heal", resourceId: 108, durationMs: 320.1 },
-  { event: "hurt", resourceId: 109, durationMs: 438.5 },
-  { event: "spring", resourceId: 110, durationMs: 441.7 },
-  { event: "conveyor", resourceId: 111, durationMs: 1083.4 },
-  { event: "rotate", resourceId: 112, durationMs: 1775.1 },
-  { event: "ceiling", resourceId: 113, durationMs: 1811.8 },
-  { event: "death", resourceId: 114, durationMs: 801.8 },
-  { event: "pause", resourceId: 115, durationMs: 1380.1 }
+export const AUDIO_RESOURCES = [
+  { resourceId: 107, durationMs: 271.7 },
+  { resourceId: 108, durationMs: 320.1 },
+  { resourceId: 109, durationMs: 438.5 },
+  { resourceId: 110, durationMs: 441.7 },
+  { resourceId: 111, durationMs: 1083.4 },
+  { resourceId: 112, durationMs: 1775.1 },
+  { resourceId: 113, durationMs: 1811.8 },
+  { resourceId: 114, durationMs: 801.8 },
+  { resourceId: 115, durationMs: 1380.1 }
 ] as const satisfies readonly {
+  resourceId: number;
+  durationMs: number;
+}[];
+
+const durationFor = (resourceId: number): number =>
+  AUDIO_RESOURCES.find((resource) => resource.resourceId === resourceId)?.durationMs ?? 0;
+
+export const AUDIO_EFFECTS = [
+  { event: "land", resourceId: 107 },
+  { event: "heal", resourceId: 108 },
+  { event: "hurt", resourceId: 110 },
+  { event: "spring", resourceId: 109 },
+  { event: "conveyor", resourceId: 112 },
+  { event: "rotate", resourceId: 111 },
+  { event: "ceiling", resourceId: 113 },
+  { event: "death", resourceId: 113 },
+  { event: "pause", resourceId: 114 },
+  { event: "abort", resourceId: 115 }
+].map((effect) => ({
+  ...effect,
+  durationMs: durationFor(effect.resourceId)
+})) as readonly {
   event: GameEventType;
   resourceId: number;
   durationMs: number;

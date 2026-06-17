@@ -47,9 +47,11 @@ const soundPreviewRows = await page.locator("[data-sound-preview]").evaluateAll(
     text: button.parentElement?.textContent?.replace(/\s+/g, " ").trim()
   }))
 );
-if (soundPreviewRows.length !== 9 ||
+if (soundPreviewRows.length !== 10 ||
     soundPreviewRows[5].event !== "rotate" ||
-    !soundPreviewRows[5].text?.includes("wave-112")) {
+    !soundPreviewRows[5].text?.includes("wave-111") ||
+    soundPreviewRows[9].event !== "abort" ||
+    !soundPreviewRows[9].text?.includes("wave-115")) {
   throw new Error(`Sound preview list is incomplete: ${JSON.stringify(soundPreviewRows)}`);
 }
 await page.locator('[data-sound-preview="rotate"]').click();

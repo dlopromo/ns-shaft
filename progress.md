@@ -114,11 +114,15 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
 - Added an options-panel sound preview list for all nine extracted WAVE effects.
   Each row shows the current event mapping, source resource id and approximate
   duration so the original sounds can be auditioned before remapping events.
+- Remapped the first audio pass from user listening notes: land stays on
+  `wave-107`; hurt uses `wave-110`; spring uses `wave-109`; rotate uses
+  `wave-111`; death uses `wave-113`; pause uses `wave-114`; and the new abort
+  event uses `wave-115`. Heal remains `wave-108`; conveyor temporarily uses
+  `wave-112`; ceiling remains `wave-113` until further confirmation.
 
 ## Remaining
 
 - Measure provisional physics constants in original-system emulation.
 - Compare provisional animation timing against original-system frame capture.
-- Confirm the correct event-to-WAVE mapping by listening to the new sound
-  preview controls, especially the rotating floor sound currently mapped to
-  `wave-112-1041.bin`.
+- Confirm whether conveyor and ceiling should keep their temporary mappings
+  after the first audio remap.

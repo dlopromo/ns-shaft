@@ -285,7 +285,10 @@ document.querySelector("#clear-records")!.addEventListener("click", () => {
 });
 pauseControl.addEventListener("click", togglePause);
 abortControl.addEventListener("click", () => {
-  if (game) showTitle();
+  if (game) {
+    audio.playEffect("abort");
+    showTitle();
+  }
 });
 document.querySelector<HTMLFormElement>("#name-form")!.addEventListener("submit", (event) => {
   event.preventDefault();
