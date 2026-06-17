@@ -190,6 +190,72 @@ describe("GameSimulation gameplay rules", () => {
     );
   });
 
+  test("snaps wall-adjacent platforms unless the side gap can fit a player", () => {
+    const playableRight = GAME_LAYOUT.playable.x + GAME_LAYOUT.playable.width;
+    const seenGaps = new Set<number>();
+
+    for (let seed = 1; seed <= 200; seed += 1) {
+      const game = new GameSimulation({ seed, difficulty: "hard", players: 1 });
+      for (let elapsed = 0; elapsed < 20_000; elapsed += 20) {
+        game.debugSetPlayer(0, { alive: true, health: 12, y: 180, vy: 0 });
+        game.step(idle, 20);
+      }
+
+      for (const platform of game.snapshot().platforms) {
+        const leftGap = platform.x - GAME_LAYOUT.playable.x;
+        const rightGap = playableRight - (platform.x + platform.width);
+        seenGaps.add(leftGap);
+        seenGaps.add(rightGap);
+        expect(leftGap === 0 || leftGap >= IPEL_PHYSICS.playerCollisionSize).toBe(true);
+        expect(rightGap === 0 || rightGap >= IPEL_PHYSICS.playerCollisionSize).toBe(true);
+      }
+    }
+
+    expect(seenGaps.has(0)).toBe(true);
+    expect([...seenGaps].some((gap) => gap >= IPEL_PHYSICS.playerCollisionSize)).toBe(true);
+  });
+
+  test("keeps every generated platform reachable from one of the previous three rows", () => {
+    const maximumThreeRowCenterDelta =
+      IPEL_PHYSICS.platformWidth / 2 +
+      IPEL_PHYSICS.playerCollisionSize / 2 +
+      IPEL_PHYSICS.controlVelocity * 500;
+
+    for (let seed = 1; seed <= 200; seed += 1) {
+      const game = new GameSimulation({ seed, difficulty: "hard", players: 1 });
+      for (let elapsed = 0; elapsed < 30_000; elapsed += 20) {
+        game.debugSetPlayer(0, { alive: true, health: 12, y: 180, vy: 0 });
+        game.step(idle, 20);
+      }
+
+      const rows = game.snapshot().platforms
+        .slice()
+        .sort((left, right) => left.y - right.y);
+      for (let index = 1; index < rows.length; index += 1) {
+        const platform = rows[index];
+        const center = platform.x + platform.width / 2;
+        const previousRows = rows.slice(Math.max(0, index - 3), index);
+        const reachable = previousRows.some((previous) =>
+          Math.abs(center - (previous.x + previous.width / 2)) <= maximumThreeRowCenterDelta
+        );
+        if (!reachable) {
+          throw new Error(JSON.stringify({
+            seed,
+            index,
+            platform: { x: platform.x, y: platform.y, center },
+            previousRows: previousRows.map((previous) => ({
+              x: previous.x,
+              y: previous.y,
+              center: previous.x + previous.width / 2,
+              delta: Math.abs(center - (previous.x + previous.width / 2))
+            })),
+            maximumThreeRowCenterDelta
+          }));
+        }
+      }
+    }
+  });
+
   test("lands only while crossing a platform top", () => {
     const game = new GameSimulation({ seed: 2, difficulty: "normal", players: 1 });
     game.debugSetPlatforms([{

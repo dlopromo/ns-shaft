@@ -86,6 +86,10 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   beside the ones digit.
 - Added an opaque black backing behind the full floor counter so frame texture
   specks cannot show through as stray dots around the ones digit or suffix.
+- Tightened platform generation near side walls and between rows: wall-adjacent
+  gaps now either fit the 26px player collision box or snap closed, and every
+  newly generated row is anchored to the nearest previous row so the player is
+  guaranteed a reachable platform within three rows.
 - Split the eight grey conveyor sprites into their two original four-frame
   arrow sequences. Right uses bitmap-101 y=16/32/48/64; left uses
   y=80/96/112/128. The renderer no longer mirrors or reverses one shared

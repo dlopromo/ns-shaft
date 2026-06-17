@@ -33,6 +33,11 @@ const PLAYER_RENDER_HALF_WIDTH = 16;
 const SPRING_LAUNCH_MS = IPEL_PHYSICS.springCompressionMs * 2;
 const ROTATING_CYCLE_MS =
   IPEL_PHYSICS.disappearingHoldMs + IPEL_PHYSICS.disappearingTurnMs;
+const THREE_ROW_REACH_MS = 500;
+const THREE_ROW_REACH_CENTER_DELTA =
+  IPEL_PHYSICS.platformWidth / 2 +
+  IPEL_PHYSICS.playerCollisionSize / 2 +
+  IPEL_PHYSICS.controlVelocity * THREE_ROW_REACH_MS;
 
 const kindForVariant = (variant: PlatformVariant): PlatformKind => {
   if (variant === "spike") return "spike";
@@ -400,20 +405,21 @@ export class GameSimulation {
   private seedInitialPlatforms(): void {
     const startY = HEIGHT - IPEL_PHYSICS.platformCollisionHeight;
     const initial: PlatformState[] = [];
-    for (let y = startY; y >= 0; y -= IPEL_PHYSICS.platformGap) {
+    const rows: number[] = [];
+    for (let y = startY; y >= 0; y -= IPEL_PHYSICS.platformGap) rows.unshift(y);
+    for (const y of rows) {
       initial.push(this.createPlatform(
         y === startY ? "normal" : this.pickVariant(),
         y === startY
           ? PLAYABLE_LEFT + (GAME_LAYOUT.playable.width - IPEL_PHYSICS.platformWidth) / 2
-          : this.randomPlatformX(),
+          : this.randomPlatformX(initial.slice(-1)),
         y,
         0
       ));
     }
-    initial.reverse();
     initial.push(this.createPlatform(
       this.pickVariant(),
-      this.randomPlatformX(),
+      this.randomPlatformX(initial.slice(-3)),
       startY + IPEL_PHYSICS.platformGap,
       this.nextFloorSequence++
     ));
@@ -433,9 +439,13 @@ export class GameSimulation {
       platform.y > value.y ? platform : value
     );
     while (lowest.y + IPEL_PHYSICS.platformCollisionHeight < HEIGHT) {
+      const anchors = this.state.platforms
+        .slice()
+        .sort((left, right) => right.y - left.y)
+        .slice(0, 1);
       const next = this.createPlatform(
         this.pickVariant(),
-        this.randomPlatformX(),
+        this.randomPlatformX(anchors),
         lowest.y + IPEL_PHYSICS.platformGap,
         this.nextFloorSequence++
       );
@@ -444,9 +454,62 @@ export class GameSimulation {
     }
   }
 
-  private randomPlatformX(): number {
-    return PLAYABLE_LEFT + Math.round(
+  private randomPlatformX(anchors: PlatformState[] = []): number {
+    const x = PLAYABLE_LEFT + Math.round(
       this.random.next() * (GAME_LAYOUT.playable.width - IPEL_PHYSICS.platformWidth)
+    );
+    return this.snapPlatformXToPlayableWall(this.keepPlatformReachable(x, anchors), anchors);
+  }
+
+  private keepPlatformReachable(x: number, anchors: PlatformState[]): number {
+    if (anchors.length === 0) return x;
+    const center = x + IPEL_PHYSICS.platformWidth / 2;
+    if (this.platformXIsReachableFromAnchors(x, anchors)) {
+      return x;
+    }
+
+    const anchor = anchors[Math.floor(this.random.next() * anchors.length)];
+    const anchorCenter = anchor.x + anchor.width / 2;
+    const direction = center < anchorCenter ? -1 : 1;
+    const reachableCenter = anchorCenter + direction * THREE_ROW_REACH_CENTER_DELTA;
+    const minimumX = PLAYABLE_LEFT;
+    const maximumX = PLAYABLE_RIGHT - IPEL_PHYSICS.platformWidth;
+    return Math.max(minimumX, Math.min(maximumX, Math.round(
+      reachableCenter - IPEL_PHYSICS.platformWidth / 2
+    )));
+  }
+
+  private snapPlatformXToPlayableWall(x: number, anchors: PlatformState[] = []): number {
+    const right = x + IPEL_PHYSICS.platformWidth;
+    const leftGap = x - PLAYABLE_LEFT;
+    const rightGap = PLAYABLE_RIGHT - right;
+    if (leftGap > 0 && leftGap < IPEL_PHYSICS.playerCollisionSize) {
+      const openX = PLAYABLE_LEFT + IPEL_PHYSICS.playerCollisionSize;
+      if (anchors.length > 0 &&
+          !this.platformXIsReachableFromAnchors(PLAYABLE_LEFT, anchors) &&
+          this.platformXIsReachableFromAnchors(openX, anchors)) {
+        return openX;
+      }
+      return PLAYABLE_LEFT;
+    }
+    if (rightGap > 0 && rightGap < IPEL_PHYSICS.playerCollisionSize) {
+      const openX = PLAYABLE_RIGHT - IPEL_PHYSICS.platformWidth -
+        IPEL_PHYSICS.playerCollisionSize;
+      const wallX = PLAYABLE_RIGHT - IPEL_PHYSICS.platformWidth;
+      if (anchors.length > 0 &&
+          !this.platformXIsReachableFromAnchors(wallX, anchors) &&
+          this.platformXIsReachableFromAnchors(openX, anchors)) {
+        return openX;
+      }
+      return PLAYABLE_RIGHT - IPEL_PHYSICS.platformWidth;
+    }
+    return x;
+  }
+
+  private platformXIsReachableFromAnchors(x: number, anchors: PlatformState[]): boolean {
+    const center = x + IPEL_PHYSICS.platformWidth / 2;
+    return anchors.some((platform) =>
+      Math.abs(center - (platform.x + platform.width / 2)) <= THREE_ROW_REACH_CENTER_DELTA
     );
   }
 
