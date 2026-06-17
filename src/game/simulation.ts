@@ -27,6 +27,8 @@ export const IPEL_PHYSICS = {
 
 const WIDTH = GAME_LAYOUT.playfield.width;
 const HEIGHT = GAME_LAYOUT.playfield.height;
+const PLAYABLE_LEFT = GAME_LAYOUT.playable.x;
+const PLAYABLE_RIGHT = GAME_LAYOUT.playable.x + GAME_LAYOUT.playable.width;
 const SPRING_LAUNCH_MS = IPEL_PHYSICS.springCompressionMs * 2;
 const ROTATING_CYCLE_MS =
   IPEL_PHYSICS.disappearingHoldMs + IPEL_PHYSICS.disappearingTurnMs;
@@ -59,7 +61,7 @@ export class GameSimulation {
     this.random = new SeededRandom(config.seed);
     const players: PlayerState[] = Array.from({ length: config.players }, (_, id) => ({
       id,
-      x: WIDTH / 2 + (id === 0 ? -14 : 14),
+      x: PLAYABLE_LEFT + GAME_LAYOUT.playable.width / 2 + (id === 0 ? -14 : 14),
       y: HEIGHT - 30,
       vx: 0,
       vy: 0,
@@ -387,7 +389,7 @@ export class GameSimulation {
       initial.push(this.createPlatform(
         y === startY ? "normal" : this.pickVariant(),
         y === startY
-          ? (WIDTH - IPEL_PHYSICS.platformWidth) / 2
+          ? PLAYABLE_LEFT + (GAME_LAYOUT.playable.width - IPEL_PHYSICS.platformWidth) / 2
           : this.randomPlatformX(),
         y,
         0
@@ -407,7 +409,7 @@ export class GameSimulation {
     if (this.state.platforms.length === 0) {
       this.state.platforms.push(this.createPlatform(
         "normal",
-        (WIDTH - IPEL_PHYSICS.platformWidth) / 2,
+        PLAYABLE_LEFT + (GAME_LAYOUT.playable.width - IPEL_PHYSICS.platformWidth) / 2,
         HEIGHT - IPEL_PHYSICS.platformCollisionHeight,
         this.nextFloorSequence++
       ));
@@ -428,9 +430,8 @@ export class GameSimulation {
   }
 
   private randomPlatformX(): number {
-    const wallW = 16;
-    return wallW + Math.round(
-      this.random.next() * (WIDTH - IPEL_PHYSICS.platformWidth - wallW * 2)
+    return PLAYABLE_LEFT + Math.round(
+      this.random.next() * (GAME_LAYOUT.playable.width - IPEL_PHYSICS.platformWidth)
     );
   }
 
@@ -541,7 +542,7 @@ export class GameSimulation {
 
   private clampPlayerX(x: number): number {
     const half = IPEL_PHYSICS.playerCollisionSize / 2;
-    return Math.max(half, Math.min(WIDTH - half, x));
+    return Math.max(PLAYABLE_LEFT + half, Math.min(PLAYABLE_RIGHT - half, x));
   }
 
   debugSetPlatforms(platforms: DebugPlatform[]): void {

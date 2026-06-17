@@ -14,6 +14,12 @@ describe("Windows 1.3J native layout", () => {
       width: 420,
       height: 356
     });
+    expect(GAME_LAYOUT.playable).toEqual({
+      x: 16,
+      y: 16,
+      width: 388,
+      height: 340
+    });
   });
 
   test("keeps HUD and status controls outside the playfield", () => {

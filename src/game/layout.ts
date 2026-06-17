@@ -2,6 +2,7 @@ export const GAME_LAYOUT = {
   frame: { width: 634, height: 436 },
   scale: 1,
   playfield: { x: 22, y: 62, width: 420, height: 356 },
+  playable: { x: 16, y: 16, width: 388, height: 340 },
   hud: {
     lifeLabel: { x: 71, y: 12 },
     lifeBar: { x: 46, y: 28 },

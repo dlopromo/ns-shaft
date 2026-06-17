@@ -107,6 +107,10 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   crop before the neighboring magenta `1P` pixels, and all HUD glyphs now draw
   from the transparent native sheet so large digit black backgrounds cannot cut
   adjacent Japanese glyph edges.
+- Added an explicit inner playable area matching the blue side walls. Player
+  collision clamps and platform generation now stay inside the 16..404 native
+  x-range instead of using the full 0..420 visual playfield that includes wall
+  sprites.
 
 ## Remaining
 

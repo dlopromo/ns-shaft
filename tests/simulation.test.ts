@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { DIFFICULTIES } from "../src/game/difficulty";
+import { GAME_LAYOUT } from "../src/game/layout";
 import { GameSimulation, IPEL_PHYSICS } from "../src/game/simulation";
 import type { InputFrame } from "../src/game/types";
 
@@ -16,7 +17,8 @@ describe("GameSimulation gameplay rules", () => {
     expect(state.players.map((player) => player.standingPlayerId)).toEqual([null, null]);
     const startFloor = state.platforms.find((platform) =>
       platform.kind === "normal" &&
-      platform.x === (420 - IPEL_PHYSICS.platformWidth) / 2 &&
+      platform.x === GAME_LAYOUT.playable.x +
+        (GAME_LAYOUT.playable.width - IPEL_PHYSICS.platformWidth) / 2 &&
       platform.y < 356
     );
     expect(startFloor).toBeDefined();
@@ -149,6 +151,32 @@ describe("GameSimulation gameplay rules", () => {
     });
   });
 
+  test("keeps the player collision box inside the blue side walls", () => {
+    const game = new GameSimulation({ seed: 12, difficulty: "normal", players: 1 });
+    const innerLeft = GAME_LAYOUT.playable.x;
+    const innerRight = GAME_LAYOUT.playable.x + GAME_LAYOUT.playable.width;
+    const half = IPEL_PHYSICS.playerCollisionSize / 2;
+
+    game.debugSetPlatforms([]);
+    game.debugSetPlayer(0, {
+      x: 40, y: 260, vy: 0, standingPlatformId: null
+    });
+    game.step({
+      players: [{ left: true, right: false }, idle.players[1]],
+      pausePressed: false
+    }, 1000);
+    expect(game.snapshot().players[0].x).toBeGreaterThanOrEqual(innerLeft + half);
+
+    game.debugSetPlayer(0, {
+      x: 380, y: 260, vy: 0, standingPlatformId: null
+    });
+    game.step({
+      players: [{ left: false, right: true }, idle.players[1]],
+      pausePressed: false
+    }, 1000);
+    expect(game.snapshot().players[0].x).toBeLessThanOrEqual(innerRight - half);
+  });
+
   test("generates only fully visible platforms", () => {
     const game = new GameSimulation({ seed: 13, difficulty: "hard", players: 1 });
     for (let elapsed = 0; elapsed < 120_000; elapsed += 20) {
@@ -156,8 +184,10 @@ describe("GameSimulation gameplay rules", () => {
       game.step(idle, 20);
     }
     const xs = game.snapshot().platforms.map((platform) => platform.x);
-    expect(Math.min(...xs)).toBeGreaterThanOrEqual(0);
-    expect(Math.max(...xs)).toBeLessThanOrEqual(420 - IPEL_PHYSICS.platformWidth);
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(GAME_LAYOUT.playable.x);
+    expect(Math.max(...xs)).toBeLessThanOrEqual(
+      GAME_LAYOUT.playable.x + GAME_LAYOUT.playable.width - IPEL_PHYSICS.platformWidth
+    );
   });
 
   test("lands only while crossing a platform top", () => {

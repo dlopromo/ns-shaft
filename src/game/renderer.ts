@@ -159,7 +159,7 @@ export class Renderer {
 
   private drawWalls(): void {
     if (!this.main.complete) return;
-    const rightX = GAME_LAYOUT.playfield.width - SPRITE_ATLAS.wall.width - 4;
+    const rightX = GAME_LAYOUT.playfield.width - SPRITE_ATLAS.wall.width;
     for (let y = 0; y < GAME_LAYOUT.playfield.height; y += SPRITE_ATLAS.wall.height) {
       this.drawSprite(SPRITE_ATLAS.wall, 0, y);
       this.drawSprite(SPRITE_ATLAS.wall, rightX, y);

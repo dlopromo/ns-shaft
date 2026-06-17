@@ -68,7 +68,7 @@ const nativePixelAudit = await page.locator("#game").evaluate((canvas) => {
     texturedPixels: count(180, 180, 48, 48, (r, g, b) => b > r + 8 && b > g + 8),
     ceilingBrightPixels: count(38, 62, 384, 16, (r, g, b) => r > 120 && g > 120 && b > 120),
     leftWallBluePixels: count(22, 94, 16, 32, (r, g, b) => b > r && b > g),
-    rightWallBluePixels: count(422, 94, 16, 32, (r, g, b) => b > r && b > g),
+    rightWallBluePixels: count(426, 94, 16, 32, (r, g, b) => b > r && b > g),
     floorPrefixStrayPixels: count(186, 12, 8, 32, (r, g, b) => r > 180 && g > 180 && b > 180),
     floorPrefixRightPixels: count(258, 12, 8, 32, (r, g, b) => r > 110 && g > 140 && b < 180),
     floorSuffixGapPixels: count(378, 12, 4, 32, (r, g, b) => r > 180 && g > 180 && b > 120),
@@ -143,6 +143,47 @@ state = await capture("05bb-player-walk-left");
 await page.keyboard.up("ArrowLeft");
 if (state.players[0].pose !== "walk" || state.players[0].facing !== "left") {
   throw new Error(`Left walk animation failed: ${JSON.stringify(state.players[0])}`);
+}
+
+const innerLeft = 16;
+const innerRight = 404;
+const playerHalf = 13;
+await page.evaluate(() => {
+  window.__nsShaftQa.setPlatforms([{
+    id: 25, x: 16, y: 260, width: 96, kind: "normal",
+    variant: "normal", direction: 1, phase: 0, collidable: true,
+    activationState: "active"
+  }]);
+  window.__nsShaftQa.setPlayer(0, {
+    x: 40, y: 260, vx: 0, vy: 0, pose: "stand", hurtUntilMs: 0,
+    standingPlatformId: 25
+  });
+});
+await page.keyboard.down("ArrowLeft");
+await page.waitForTimeout(220);
+state = await capture("05bc-player-left-wall-clamp");
+await page.keyboard.up("ArrowLeft");
+if (state.players[0].x < innerLeft + playerHalf) {
+  throw new Error(`Player overlapped the left wall: ${JSON.stringify(state.players[0])}`);
+}
+
+await page.evaluate(() => {
+  window.__nsShaftQa.setPlatforms([{
+    id: 26, x: 308, y: 260, width: 96, kind: "normal",
+    variant: "normal", direction: 1, phase: 0, collidable: true,
+    activationState: "active"
+  }]);
+  window.__nsShaftQa.setPlayer(0, {
+    x: 380, y: 260, vx: 0, vy: 0, pose: "stand", hurtUntilMs: 0,
+    standingPlatformId: 26
+  });
+});
+await page.keyboard.down("ArrowRight");
+await page.waitForTimeout(220);
+state = await capture("05bd-player-right-wall-clamp");
+await page.keyboard.up("ArrowRight");
+if (state.players[0].x > innerRight - playerHalf) {
+  throw new Error(`Player overlapped the right wall: ${JSON.stringify(state.players[0])}`);
 }
 
 const conveyorStartX = 120;
