@@ -26,7 +26,7 @@ export const AUDIO_EFFECTS = [
   { event: "spring", resourceId: 109 },
   { event: "conveyor", resourceId: 112 },
   { event: "rotate", resourceId: 111 },
-  { event: "ceiling", resourceId: 113 },
+  { event: "ceiling", resourceId: 110 },
   { event: "death", resourceId: 113 },
   { event: "pause", resourceId: 114 },
   { event: "abort", resourceId: 115 }

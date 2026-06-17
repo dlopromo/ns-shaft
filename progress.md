@@ -116,13 +116,13 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   duration so the original sounds can be auditioned before remapping events.
 - Remapped the first audio pass from user listening notes: land stays on
   `wave-107`; hurt uses `wave-110`; spring uses `wave-109`; rotate uses
-  `wave-111`; death uses `wave-113`; pause uses `wave-114`; and the new abort
-  event uses `wave-115`. Heal remains `wave-108`; conveyor temporarily uses
-  `wave-112`; ceiling remains `wave-113` until further confirmation.
+  `wave-111`; ceiling also uses the hurt sound `wave-110`; death uses
+  `wave-113`; pause uses `wave-114`; and the new abort event uses `wave-115`.
+  Heal remains `wave-108`; conveyor temporarily uses `wave-112`.
 
 ## Remaining
 
 - Measure provisional physics constants in original-system emulation.
 - Compare provisional animation timing against original-system frame capture.
-- Confirm whether conveyor and ceiling should keep their temporary mappings
-  after the first audio remap.
+- Confirm whether conveyor should keep its temporary mapping after the first
+  audio remap.

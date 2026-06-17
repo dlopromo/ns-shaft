@@ -14,7 +14,7 @@ describe("original audio manifest", () => {
       spring: 109,
       conveyor: 112,
       rotate: 111,
-      ceiling: 113,
+      ceiling: 110,
       death: 113,
       pause: 114,
       abort: 115
@@ -37,7 +37,7 @@ describe("original audio manifest", () => {
       { event: "spring", resourceId: 109, durationMs: 439 },
       { event: "conveyor", resourceId: 112, durationMs: 1775 },
       { event: "rotate", resourceId: 111, durationMs: 1083 },
-      { event: "ceiling", resourceId: 113, durationMs: 1812 },
+      { event: "ceiling", resourceId: 110, durationMs: 442 },
       { event: "death", resourceId: 113, durationMs: 1812 },
       { event: "pause", resourceId: 114, durationMs: 802 },
       { event: "abort", resourceId: 115, durationMs: 1380 }
