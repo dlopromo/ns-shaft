@@ -1,5 +1,5 @@
 import "./style.css";
-import { GameAudio } from "./game/audio";
+import { AUDIO_EFFECTS, GameAudio, type EffectName } from "./game/audio";
 import { KeyboardInput } from "./game/input";
 import { Renderer } from "./game/renderer";
 import { integerScaleForViewport } from "./game/layout";
@@ -22,6 +22,14 @@ declare global {
 const root = document.querySelector<HTMLDivElement>("#app");
 if (!root) throw new Error("#app was not found");
 const assetUrl = (path: string): string => `${import.meta.env.BASE_URL}${path}`;
+const soundPreviewRows = AUDIO_EFFECTS.map((effect) => `
+  <li>
+    <button type="button" data-sound-preview="${effect.event}">Play</button>
+    <span>${effect.event}</span>
+    <code>wave-${effect.resourceId}</code>
+    <small>${Math.round(effect.durationMs)}ms</small>
+  </li>
+`).join("");
 
 root.innerHTML = `
   <main class="cabinet">
@@ -57,6 +65,10 @@ root.innerHTML = `
           <label><input id="music" type="checkbox"> 音楽</label>
           <label><input id="sound" type="checkbox"> 効果音</label>
           <label><input id="fast" type="checkbox"> 高速化</label>
+          <section class="sound-preview" aria-label="効果音テスト">
+            <h3>効果音テスト</h3>
+            <ol>${soundPreviewRows}</ol>
+          </section>
           <button data-close>戻る</button>
         </div>
       </section>
@@ -244,6 +256,12 @@ document.querySelectorAll<HTMLButtonElement>("[data-open]").forEach((button) => 
 });
 document.querySelectorAll<HTMLButtonElement>("[data-close]").forEach((button) => {
   button.addEventListener("click", () => showTitle());
+});
+document.querySelectorAll<HTMLButtonElement>("[data-sound-preview]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const effect = button.dataset.soundPreview as EffectName;
+    void audio.previewEffect(effect);
+  });
 });
 for (const key of ["conveyor", "spring", "rotating", "music", "sound", "fast"] as const) {
   document.querySelector<HTMLInputElement>(`#${key}`)!.addEventListener("change", (event) => {

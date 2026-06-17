@@ -146,10 +146,55 @@ canvas {
   display: grid;
   gap: 10px;
   min-width: 330px;
+  max-height: 390px;
+  overflow: auto;
   padding: 22px;
 }
 .dialog h2 { margin: 0 0 8px; text-align: center; font-size: 17px; }
 .dialog label { display: flex; justify-content: space-between; gap: 25px; }
+#options-panel .dialog {
+  gap: 5px;
+  width: 382px;
+  max-height: 406px;
+  padding: 14px 20px;
+}
+#options-panel .dialog h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+#options-panel .dialog label {
+  line-height: 18px;
+}
+.sound-preview {
+  display: grid;
+  gap: 3px;
+  padding-top: 5px;
+  border-top: 1px solid #888;
+}
+.sound-preview h3 {
+  margin: 0;
+  font-size: 12px;
+  text-align: center;
+}
+.sound-preview ol {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sound-preview li {
+  display: grid;
+  grid-template-columns: 34px 42px 42px 28px;
+  gap: 3px;
+  align-items: center;
+  font-size: 10px;
+  line-height: 14px;
+}
+.sound-preview button { padding: 0 3px; font-size: 10px; line-height: 14px; }
+.sound-preview code { font-size: 10px; }
+.sound-preview small { text-align: right; }
 .records-screen { background: rgba(0, 0, 0, .18); }
 .records-content {
   position: relative;

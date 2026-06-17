@@ -41,6 +41,19 @@ await page.getByRole("button", { name: "オプション" }).click();
 await page.locator("#difficulty").selectOption("hard");
 await page.locator("#conveyor").check();
 await capture("02-options");
+const soundPreviewRows = await page.locator("[data-sound-preview]").evaluateAll((buttons) =>
+  buttons.map((button) => ({
+    event: button.getAttribute("data-sound-preview"),
+    text: button.parentElement?.textContent?.replace(/\s+/g, " ").trim()
+  }))
+);
+if (soundPreviewRows.length !== 9 ||
+    soundPreviewRows[5].event !== "rotate" ||
+    !soundPreviewRows[5].text?.includes("wave-112")) {
+  throw new Error(`Sound preview list is incomplete: ${JSON.stringify(soundPreviewRows)}`);
+}
+await page.locator('[data-sound-preview="rotate"]').click();
+await page.waitForTimeout(50);
 await page.getByRole("button", { name: "戻る" }).click();
 
 await page.getByRole("button", { name: "ベスト５" }).click();

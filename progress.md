@@ -111,8 +111,14 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   collision clamps and platform generation now stay inside the 16..404 native
   x-range instead of using the full 0..420 visual playfield that includes wall
   sprites.
+- Added an options-panel sound preview list for all nine extracted WAVE effects.
+  Each row shows the current event mapping, source resource id and approximate
+  duration so the original sounds can be auditioned before remapping events.
 
 ## Remaining
 
 - Measure provisional physics constants in original-system emulation.
 - Compare provisional animation timing against original-system frame capture.
+- Confirm the correct event-to-WAVE mapping by listening to the new sound
+  preview controls, especially the rotating floor sound currently mapped to
+  `wave-112-1041.bin`.

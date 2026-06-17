@@ -1,22 +1,31 @@
 import type { GameEvent, GameEventType } from "./types";
 import { Midi } from "@tonejs/midi";
 
+export const AUDIO_EFFECTS = [
+  { event: "land", resourceId: 107, durationMs: 271.7 },
+  { event: "heal", resourceId: 108, durationMs: 320.1 },
+  { event: "hurt", resourceId: 109, durationMs: 438.5 },
+  { event: "spring", resourceId: 110, durationMs: 441.7 },
+  { event: "conveyor", resourceId: 111, durationMs: 1083.4 },
+  { event: "rotate", resourceId: 112, durationMs: 1775.1 },
+  { event: "ceiling", resourceId: 113, durationMs: 1811.8 },
+  { event: "death", resourceId: 114, durationMs: 801.8 },
+  { event: "pause", resourceId: 115, durationMs: 1380.1 }
+] as const satisfies readonly {
+  event: GameEventType;
+  resourceId: number;
+  durationMs: number;
+}[];
+
 export const AUDIO_MANIFEST = {
   music: `${import.meta.env.BASE_URL}assets/BGM.MID`,
-  effects: {
-    land: `${import.meta.env.BASE_URL}assets/extracted/wave-107-1041.bin`,
-    heal: `${import.meta.env.BASE_URL}assets/extracted/wave-108-1041.bin`,
-    hurt: `${import.meta.env.BASE_URL}assets/extracted/wave-109-1041.bin`,
-    spring: `${import.meta.env.BASE_URL}assets/extracted/wave-110-1041.bin`,
-    conveyor: `${import.meta.env.BASE_URL}assets/extracted/wave-111-1041.bin`,
-    rotate: `${import.meta.env.BASE_URL}assets/extracted/wave-112-1041.bin`,
-    ceiling: `${import.meta.env.BASE_URL}assets/extracted/wave-113-1041.bin`,
-    death: `${import.meta.env.BASE_URL}assets/extracted/wave-114-1041.bin`,
-    pause: `${import.meta.env.BASE_URL}assets/extracted/wave-115-1041.bin`
-  } satisfies Record<GameEventType, string>
+  effects: Object.fromEntries(AUDIO_EFFECTS.map((effect) => [
+    effect.event,
+    `${import.meta.env.BASE_URL}assets/extracted/wave-${effect.resourceId}-1041.bin`
+  ])) as Record<GameEventType, string>
 };
 
-type EffectName = keyof typeof AUDIO_MANIFEST.effects;
+export type EffectName = keyof typeof AUDIO_MANIFEST.effects;
 
 export class GameAudio {
   private context?: AudioContext;
@@ -58,15 +67,20 @@ export class GameAudio {
     for (const event of events) this.playEffect(event.type);
   }
 
-  playEffect(name: EffectName): void {
+  playEffect(name: EffectName, options: { force?: boolean } = {}): void {
     const buffer = this.buffers.get(name);
-    if (!this.context || !buffer || !this.soundEnabled) return;
+    if (!this.context || !buffer || (!this.soundEnabled && !options.force)) return;
     const source = this.context.createBufferSource();
     const gain = this.context.createGain();
     gain.gain.value = 0.5;
     source.buffer = buffer;
     source.connect(gain).connect(this.context.destination);
     source.start();
+  }
+
+  async previewEffect(name: EffectName): Promise<void> {
+    await this.unlock();
+    this.playEffect(name, { force: true });
   }
 
   async startMusic(): Promise<void> {
