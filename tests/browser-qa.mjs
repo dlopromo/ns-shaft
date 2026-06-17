@@ -84,6 +84,7 @@ const nativePixelAudit = await page.locator("#game").evaluate((canvas) => {
   return {
     texturedPixels: count(180, 180, 48, 48, (r, g, b) => b > r + 8 && b > g + 8),
     ceilingBrightPixels: count(38, 62, 384, 16, (r, g, b) => r > 120 && g > 120 && b > 120),
+    ceilingBlueGapPixels: count(38, 62, 384, 16, (r, g, b) => b > r + 20 && b > g + 20),
     leftWallBluePixels: count(22, 94, 16, 32, (r, g, b) => b > r && b > g),
     rightWallBluePixels: count(426, 94, 16, 32, (r, g, b) => b > r && b > g),
     floorPrefixStrayPixels: count(186, 12, 8, 32, (r, g, b) => r > 180 && g > 180 && b > 180),
@@ -95,6 +96,7 @@ const nativePixelAudit = await page.locator("#game").evaluate((canvas) => {
 });
 if (nativePixelAudit.texturedPixels < 500 ||
     nativePixelAudit.ceilingBrightPixels < 500 ||
+    nativePixelAudit.ceilingBlueGapPixels < 100 ||
     nativePixelAudit.leftWallBluePixels < 100 ||
     nativePixelAudit.rightWallBluePixels < 100 ||
     nativePixelAudit.floorPrefixStrayPixels > 4 ||

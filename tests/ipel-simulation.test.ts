@@ -14,8 +14,8 @@ describe("iPel-aligned millisecond simulation", () => {
       gravity: 0.0015,
       controlVelocity: 0.2,
       conveyorVelocity: 0.1,
-      springVelocity: -0.35,
-      springCompressionMs: 80,
+      springVelocity: -0.5,
+      springCompressionMs: 100,
       disappearingHoldMs: 150,
       disappearingTurnMs: 240,
       platformGap: 60,
@@ -56,7 +56,7 @@ describe("iPel-aligned millisecond simulation", () => {
       .toBeGreaterThanOrEqual(356);
   });
 
-  test("compresses a spring for 160ms before launch", () => {
+  test("compresses a spring for 200ms before launch", () => {
     const game = new GameSimulation({ seed: 44, difficulty: "hard", players: 1 });
     game.debugSetPlatforms([{
       id: 1, x: 80, y: 260, width: 96, kind: "spring",
@@ -66,14 +66,14 @@ describe("iPel-aligned millisecond simulation", () => {
     game.debugSetPlayer(0, {
       x: 120, y: 260, vy: 0, standingPlatformId: 1, onPlatformSince: 0
     });
-    game.step(idle, 159);
+    game.step(idle, 199);
     expect(game.snapshot().players[0].standingPlatformId).toBe(1);
     game.step(idle, 1);
     expect(game.snapshot().players[0].standingPlatformId).toBeNull();
-    expect(game.snapshot().players[0].vy).toBeCloseTo(-0.35);
+    expect(game.snapshot().players[0].vy).toBeCloseTo(-0.5);
   });
 
-  test("keeps the spring triggered during its 80ms rebound", () => {
+  test("keeps the spring triggered during its 100ms rebound", () => {
     const game = new GameSimulation({ seed: 440, difficulty: "hard", players: 1 });
     game.debugSetPlatforms([{
       id: 1, x: 80, y: 260, width: 96, kind: "spring",
@@ -83,13 +83,13 @@ describe("iPel-aligned millisecond simulation", () => {
     game.debugSetPlayer(0, {
       x: 120, y: 260, standingPlatformId: 1
     });
-    game.step(idle, 220);
+    game.step(idle, 250);
     expect(game.snapshot().platforms[0].activationState).toBe("triggered");
-    game.step(idle, 20);
+    game.step(idle, 50);
     expect(game.snapshot().platforms[0].activationState).toBe("active");
   });
 
-  test("does not launch the player back to the previous platform row", () => {
+  test("spring launch skips landing on platforms above the launch point", () => {
     const game = new GameSimulation({ seed: 441, difficulty: "hard", players: 1 });
     game.debugSetPlatforms([
       {
@@ -98,24 +98,23 @@ describe("iPel-aligned millisecond simulation", () => {
         activationState: "triggered"
       },
       {
-        id: 2, x: 80, y: 200, width: 96, kind: "normal",
+        id: 2, x: 80, y: 230, width: 96, kind: "normal",
         variant: "normal", direction: 1, phase: 0, collidable: true
       }
     ]);
     game.debugSetPlayer(0, {
       x: 120, y: 260, standingPlatformId: 1
     });
-    let closestGap = Number.POSITIVE_INFINITY;
-    for (let elapsed = 0; elapsed < 700; elapsed += 20) {
+    let crossedAbovePlatform = false;
+    for (let elapsed = 0; elapsed < 1000; elapsed += 20) {
       game.step(idle, 20);
       const state = game.snapshot();
       const player = state.players[0];
       const previousRow = state.platforms.find((platform) => platform.id === 2)!;
-      closestGap = Math.min(closestGap, player.y - previousRow.y);
-      expect(player.y).toBeGreaterThan(previousRow.y);
+      if (player.y < previousRow.y) crossedAbovePlatform = true;
       expect(player.standingPlatformId).not.toBe(2);
     }
-    expect(closestGap).toBeLessThan(IPEL_PHYSICS.platformGap);
+    expect(crossedAbovePlatform).toBe(true);
   });
 
   test("holds the player for 150ms, then drops them for one roll and resets", () => {

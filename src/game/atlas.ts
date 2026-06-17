@@ -120,7 +120,7 @@ export const SPRITE_ATLAS = {
     spike: [object(384, 368, 96, 32)]
   },
   wall: sprite(512, 0, 16, 32),
-  ceiling: sprite(0, 368, 384, 16),
+  ceiling: object(0, 368, 384, 16),
   pause: ui(0, 320, 128, 40),
   floorPrefix: ui(128, 320, 72, 32),
   floorPrefixParts: [

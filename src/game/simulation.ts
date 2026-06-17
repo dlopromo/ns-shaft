@@ -11,8 +11,8 @@ export const IPEL_PHYSICS = {
   gravity: 0.0015,
   controlVelocity: 0.2,
   conveyorVelocity: 0.1,
-  springVelocity: -0.35,
-  springCompressionMs: 80,
+  springVelocity: -0.5,
+  springCompressionMs: 100,
   disappearingHoldMs: 150,
   disappearingTurnMs: 240,
   platformGap: 60,
@@ -77,6 +77,7 @@ export class GameSimulation {
       standingPlatformId: null,
       standingPlayerId: null,
       onPlatformSince: null,
+      springIgnoreAboveY: null,
       hurtUntilTick: 0,
       hurtUntilMs: 0
     }));
@@ -202,6 +203,11 @@ export class GameSimulation {
     const direction = Number(input.right) - Number(input.left);
     if (direction !== 0) player.facing = direction < 0 ? "left" : "right";
     const control = direction * IPEL_PHYSICS.controlVelocity;
+    if (player.springIgnoreAboveY !== null &&
+        player.vy >= 0 &&
+        player.y >= player.springIgnoreAboveY) {
+      player.springIgnoreAboveY = null;
+    }
 
     const standing = player.standingPlatformId === null ? undefined :
       this.state.platforms.find((platform) => platform.id === player.standingPlatformId);
@@ -235,6 +241,7 @@ export class GameSimulation {
           player.standingPlayerId = null;
           player.onPlatformSince = null;
           player.vy = IPEL_PHYSICS.springVelocity;
+          player.springIgnoreAboveY = standing.y;
           this.events.push({ type: "spring", playerId: player.id, platformId: standing.id });
         } else {
           this.resolveCeiling(player);
@@ -283,6 +290,7 @@ export class GameSimulation {
       player.pose = "dead";
       player.standingPlatformId = null;
       player.standingPlayerId = null;
+      player.springIgnoreAboveY = null;
       this.events.push({ type: "death", playerId: player.id });
     }
   }
@@ -310,6 +318,7 @@ export class GameSimulation {
   ): PlatformState | undefined {
     return this.state.platforms.find((platform) =>
       platform.collidable &&
+      (player.springIgnoreAboveY === null || platform.y >= player.springIgnoreAboveY) &&
       this.playerOverlapsPlatform(player, platform) &&
       previousFoot <= platform.y - platformVelocity * stepMs &&
       newFoot >= platform.y
@@ -320,6 +329,7 @@ export class GameSimulation {
     player.vy = velocity;
     player.standingPlatformId = platform.id;
     player.standingPlayerId = null;
+    player.springIgnoreAboveY = null;
     player.onPlatformSince = this.state.timeMs;
     if (platform.variant === "disappearing" || platform.variant === "spring") {
       this.triggerPlatform(platform);
@@ -354,6 +364,7 @@ export class GameSimulation {
       player.standingPlatformId = null;
       player.standingPlayerId = null;
       player.onPlatformSince = null;
+      player.springIgnoreAboveY = null;
     }
     player.health = Math.max(0, player.health - IPEL_PHYSICS.ceilingDamage);
     player.hurtUntilMs = this.state.timeMs + IPEL_PHYSICS.hurtBlinkMs;

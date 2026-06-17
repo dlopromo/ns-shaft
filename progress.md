@@ -73,8 +73,8 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   y=80/96/112/128. The renderer no longer mirrors or reverses one shared
   sequence. Browser QA confirms x=120 becomes 130 on right and 110 on left.
 - Implemented the full seven-frame spring interaction: frames 0 through 6
-  compress over 160ms while the player remains attached, frame 6 launches the
-  player, then frames 5 through 0 rebound over 80ms. QA captures both the
+  compress over 200ms while the player remains attached, frame 6 launches the
+  player, then frames 5 through 0 rebound over 100ms. QA captures both the
   compressed and rebound states.
 - Corrected the rotating floor to use only its six grey source images. The
   seventh animation step returns to the first grey image; the blue normal
@@ -121,8 +121,11 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   Heal remains `wave-108`; conveyor now uses the same `wave-107` as land.
 - Drew walls and ceiling before players so characters are always visible above
   gameplay blockers, changed the unloaded background fallback from black to
-  blue, and lowered spring launch velocity to prevent returning to the previous
-  60px platform row.
+  blue, and moved the ceiling spike strip into the transparent native sprite
+  sheet so the top spikes do not carry a black background.
+- Restored the previous spring launch timing and strength while preventing
+  spring launches from landing on any platform above the launch point until the
+  player falls back below that launch height.
 
 ## Remaining
 

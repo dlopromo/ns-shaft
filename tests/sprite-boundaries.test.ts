@@ -18,6 +18,7 @@ describe("packed bitmap source boundaries", () => {
     for (const frame of Object.values(SPRITE_ATLAS.platformAnimations).flat()) {
       expect(frame.source).toBe("native");
     }
+    expect(SPRITE_ATLAS.ceiling.source).toBe("native");
   });
 
   test("records the native non-uniform frame dimensions", () => {

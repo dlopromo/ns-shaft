@@ -37,6 +37,7 @@ export interface PlayerState {
   standingPlatformId: number | null;
   standingPlayerId: number | null;
   onPlatformSince: number | null;
+  springIgnoreAboveY: number | null;
   hurtUntilTick: number;
   hurtUntilMs: number;
 }

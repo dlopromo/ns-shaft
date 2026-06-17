@@ -76,7 +76,7 @@ describe("original Windows sprite atlas", () => {
 
   test("maps the complete original gameplay UI sprites", () => {
     expect(SPRITE_ATLAS.ceiling).toMatchObject({
-      source: "main", x: 0, y: 368, width: 384, height: 16
+      source: "native", x: 0, y: 368, width: 384, height: 16
     });
     expect(SPRITE_ATLAS.wall).toMatchObject({
       source: "main", x: 512, y: 0, width: 16, height: 32
