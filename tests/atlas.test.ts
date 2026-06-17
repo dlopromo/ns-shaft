@@ -97,7 +97,13 @@ describe("original Windows sprite atlas", () => {
       [166, 320, 34, 32]
     ]);
     expect(SPRITE_ATLAS.floorSuffix).toMatchObject({
-      x: 196, y: 320, width: 40, height: 32
+      x: 200, y: 320, width: 36, height: 32
+    });
+    expect(SPRITE_ATLAS.onePlayerLabel).toMatchObject({
+      x: 238, y: 320, width: 34, height: 16
+    });
+    expect(SPRITE_ATLAS.twoPlayerLabel).toMatchObject({
+      x: 234, y: 336, width: 38, height: 16
     });
     expect(SPRITE_ATLAS.difficultyLabels.map(({ x, y, width, height }) =>
       [x, y, width, height]

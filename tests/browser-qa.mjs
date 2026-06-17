@@ -89,9 +89,11 @@ const nativePixelAudit = await page.locator("#game").evaluate((canvas) => {
     rightWallBluePixels: count(426, 94, 16, 32, (r, g, b) => b > r && b > g),
     floorPrefixStrayPixels: count(186, 12, 8, 32, (r, g, b) => r > 180 && g > 180 && b > 180),
     floorPrefixRightPixels: count(258, 12, 8, 32, (r, g, b) => r > 110 && g > 140 && b < 180),
-    floorSuffixGapPixels: count(378, 12, 4, 32, (r, g, b) => r > 180 && g > 180 && b > 120),
-    floorSuffixRightPixels: count(414, 12, 8, 32, (r, g, b) => r > 110 && g > 140 && b < 180),
-    difficultyLeftStrayPixels: count(500, 113, 28, 13, (r, g, b) => r > 160 && g > 160 && b > 160)
+    floorSuffixGapPixels: count(384, 12, 4, 32, (r, g, b) => r > 180 && g > 180 && b > 120),
+    floorDigitBackgroundStrayPixels: count(384, 12, 4, 12, (r, g, b) => r > 35 || g > 35 || b > 35),
+    floorSuffixRightPixels: count(412, 12, 8, 32, (r, g, b) => r > 110 && g > 140 && b < 180),
+    difficultyLeftStrayPixels: count(500, 113, 28, 13, (r, g, b) => r > 160 && g > 160 && b > 160),
+    recordDigitsAlignedPixels: count(542, 165, 52, 4, (r, g, b) => r > 150 && g > 150 && b > 150)
   };
 });
 if (nativePixelAudit.texturedPixels < 500 ||
@@ -102,8 +104,10 @@ if (nativePixelAudit.texturedPixels < 500 ||
     nativePixelAudit.floorPrefixStrayPixels > 4 ||
     nativePixelAudit.floorPrefixRightPixels < 8 ||
     nativePixelAudit.floorSuffixGapPixels > 4 ||
+    nativePixelAudit.floorDigitBackgroundStrayPixels > 0 ||
     nativePixelAudit.floorSuffixRightPixels < 8 ||
-    nativePixelAudit.difficultyLeftStrayPixels > 4) {
+    nativePixelAudit.difficultyLeftStrayPixels > 4 ||
+    nativePixelAudit.recordDigitsAlignedPixels < 20) {
   throw new Error(`Native playfield art is cropped or missing: ${JSON.stringify(nativePixelAudit)}`);
 }
 
@@ -388,6 +392,41 @@ await page.keyboard.up("KeyX");
 state = await capture("09-two-player");
 if (state.players.length !== 2 || state.players[1].x <= 224) {
   throw new Error(`2P movement failed: ${JSON.stringify(state.players)}`);
+}
+const twoPlayerHudAudit = await page.locator("#game").evaluate((canvas) => {
+  const context = canvas.getContext("2d");
+  const count = (x, y, width, height, predicate) => {
+    const pixels = context.getImageData(x, y, width, height).data;
+    let matches = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (predicate(pixels[index], pixels[index + 1], pixels[index + 2])) matches += 1;
+    }
+    return matches;
+  };
+  const magenta = (r, g, b) => r > 190 && b > 110 && g < 120;
+  const life = (r, g, b) => r > 180 && (g > 90 || b < 80);
+  return {
+    twoPlayerLabel: count(30, 12, 40, 16, magenta),
+    onePlayerLabel: count(334, 12, 36, 16, magenta),
+    twoPlayerLife: count(32, 28, 96, 16, life),
+    onePlayerLife: count(336, 28, 96, 16, life),
+    shiftedFloor: count(133, 12, 200, 32, (r, g, b) => r > 110 && g > 130 && b < 180),
+    floorSuffixStrayDot: count(293, 12, 4, 12, (r, g, b) => r > 110 && g > 130 && b < 180),
+    leftGap: count(128, 12, 5, 32, (r, g, b) => r > 110 && g > 130 && b < 180),
+    rightGap: count(331, 12, 5, 16, magenta),
+    symmetricLifeEdges: Math.abs((32 - 22) - (442 - (336 + 96)))
+  };
+});
+if (twoPlayerHudAudit.twoPlayerLabel < 30 ||
+    twoPlayerHudAudit.onePlayerLabel < 30 ||
+    twoPlayerHudAudit.twoPlayerLife < 500 ||
+    twoPlayerHudAudit.onePlayerLife < 500 ||
+    twoPlayerHudAudit.shiftedFloor < 500 ||
+    twoPlayerHudAudit.floorSuffixStrayDot > 0 ||
+    twoPlayerHudAudit.leftGap > 4 ||
+    twoPlayerHudAudit.rightGap > 0 ||
+    twoPlayerHudAudit.symmetricLifeEdges !== 0) {
+  throw new Error(`2P HUD is missing or misaligned: ${JSON.stringify(twoPlayerHudAudit)}`);
 }
 
 await page.evaluate(() => {

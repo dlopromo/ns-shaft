@@ -68,6 +68,24 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   derived only from the platform currently under the player, so it cannot leak
   into rotating floors. Spikes deal 5 health, every non-spike landing restores
   1 health, and idle standing uses one fixed front-facing frame.
+- Restored the original two-player HUD composition with separate `2P LIFE` and
+  `1P LIFE` labels, independent life bars and a shorter centered floor counter
+  so the right-side player health no longer overlaps the score text.
+- Shifted the two-player floor counter to start after the left life bar and
+  added browser pixel checks for both the left health gap and right `1P` gap.
+- Aligned the visible `1P/2P` label baselines with `LIFE` and moved the sidebar
+  record digits down to match the fixed `地下` / `階` text in the frame bitmap.
+- Aligned the two-player left life bar to the `2P LIFE` text start instead of
+  the single-player bar position.
+- Re-centered the two-player top HUD around the playfield: left/right life bars
+  are now symmetric to the game frame and the floor counter sits between them.
+- Moved floor suffix sprites two pixels right to stop overlapping the final
+  large digit, and top-aligned sidebar record digits for consistent rows.
+- Re-cut the `階` floor suffix from bitmap x=200..236, preserving the left
+  stroke while excluding neighboring packed pixels that appeared as a dot
+  beside the ones digit.
+- Added an opaque black backing behind the full floor counter so frame texture
+  specks cannot show through as stray dots around the ones digit or suffix.
 - Split the eight grey conveyor sprites into their two original four-frame
   arrow sequences. Right uses bitmap-101 y=16/32/48/64; left uses
   y=80/96/112/128. The renderer no longer mirrors or reverses one shared
@@ -103,10 +121,10 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   a stray `う` from the neighboring packed label, and browser QA now guards the
   suffix gap plus difficulty-label stray pixels.
 - Reworked the floor HUD text after boundary review: `地下` is split into
-  audited `地` and `下` source rectangles, `階` uses the exact `x=196..236`
-  crop before the neighboring magenta `1P` pixels, and all HUD glyphs now draw
-  from the transparent native sheet so large digit black backgrounds cannot cut
-  adjacent Japanese glyph edges.
+  audited `地` and `下` source rectangles, `階` uses the `x=200..236` crop to
+  keep its left stroke without neighboring packed pixels, and all HUD glyphs
+  now draw from the transparent native sheet so large digit black backgrounds
+  cannot cut adjacent Japanese glyph edges.
 - Added an explicit inner playable area matching the blue side walls. Player
   collision clamps and platform generation now stay inside the 16..404 native
   x-range instead of using the full 0..420 visual playfield that includes wall

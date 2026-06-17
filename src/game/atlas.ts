@@ -127,7 +127,9 @@ export const SPRITE_ATLAS = {
     ui(128, 320, 36, 32),
     ui(166, 320, 34, 32)
   ],
-  floorSuffix: ui(196, 320, 40, 32),
+  floorSuffix: ui(200, 320, 36, 32),
+  onePlayerLabel: ui(238, 320, 34, 16),
+  twoPlayerLabel: ui(234, 336, 38, 16),
   lifeLabel: ui(224, 352, 48, 16),
   lifeBars: Array.from({ length: 12 }, (_, index) =>
     ui(384, index * 16, 96, 16)

@@ -181,36 +181,96 @@ export class Renderer {
   private drawHud(state: GameStateSnapshot): void {
     if (!this.native.complete) return;
     const layout = GAME_LAYOUT.hud;
-    this.drawSpriteAt(SPRITE_ATLAS.lifeLabel, layout.lifeLabel.x, layout.lifeLabel.y);
-    const health = state.players[0]?.health ?? 0;
+    if (state.players.length > 1) {
+      this.drawLifeGauge(
+        SPRITE_ATLAS.twoPlayerLabel,
+        layout.twoPlayer.left.playerLabel,
+        layout.twoPlayer.left.lifeLabel,
+        layout.twoPlayer.left.lifeBar,
+        state.players[1]?.health ?? 0
+      );
+      this.drawLifeGauge(
+        SPRITE_ATLAS.onePlayerLabel,
+        layout.twoPlayer.right.playerLabel,
+        layout.twoPlayer.right.lifeLabel,
+        layout.twoPlayer.right.lifeBar,
+        state.players[0]?.health ?? 0
+      );
+      this.drawFloorCounter(
+        layout.twoPlayer.floorPrefix,
+        layout.twoPlayer.floorDigits,
+        layout.twoPlayer.floorSuffix,
+        state.floor,
+        3
+      );
+      return;
+    }
+
+    this.drawLifeGauge(
+      null,
+      null,
+      layout.lifeLabel,
+      layout.lifeBar,
+      state.players[0]?.health ?? 0
+    );
+    this.drawFloorCounter(layout.floorPrefix, layout.floorDigits, layout.floorSuffix, state.floor, 4);
+  }
+
+  private drawLifeGauge(
+    playerLabel: SpriteDefinition | null,
+    playerLabelPosition: { x: number; y: number } | null,
+    lifeLabelPosition: { x: number; y: number },
+    lifeBarPosition: { x: number; y: number },
+    health: number
+  ): void {
+    if (playerLabel && playerLabelPosition) {
+      this.drawSpriteAt(playerLabel, playerLabelPosition.x, playerLabelPosition.y);
+    }
+    this.drawSpriteAt(SPRITE_ATLAS.lifeLabel, lifeLabelPosition.x, lifeLabelPosition.y);
     const barIndex = Math.max(0, Math.min(
       SPRITE_ATLAS.lifeBars.length - 1,
       health
     ));
-    this.drawSpriteAt(SPRITE_ATLAS.lifeBars[barIndex], layout.lifeBar.x, layout.lifeBar.y);
+    this.drawSpriteAt(SPRITE_ATLAS.lifeBars[barIndex], lifeBarPosition.x, lifeBarPosition.y);
     if (health >= 12) {
       this.ctx.drawImage(
         this.native,
         384 + 80, 176, 8, 16,
-        layout.lifeBar.x + 88, layout.lifeBar.y, 8, 16
+        lifeBarPosition.x + 88, lifeBarPosition.y, 8, 16
       );
     }
+  }
+
+  private drawFloorCounter(
+    prefix: { x: number; y: number },
+    digits: { x: number; y: number; step: number },
+    suffix: { x: number; y: number },
+    floor: number,
+    digitCount: number
+  ): void {
     for (let index = 0; index < SPRITE_ATLAS.floorPrefixParts.length; index += 1) {
       this.drawSpriteAt(
         SPRITE_ATLAS.floorPrefixParts[index],
-        layout.floorPrefix.x + index * 38,
-        layout.floorPrefix.y
+        prefix.x + index * 38,
+        prefix.y
       );
     }
-    const value = String(state.floor).padStart(4, "0").slice(-4);
+    const value = String(floor).padStart(digitCount, "0").slice(-digitCount);
+    this.ctx.fillStyle = "#000";
+    this.ctx.fillRect(
+      digits.x,
+      digits.y - 4,
+      suffix.x + SPRITE_ATLAS.floorSuffix.width - digits.x,
+      SPRITE_ATLAS.digits[0].height + 4
+    );
     for (let index = 0; index < value.length; index += 1) {
       this.drawSpriteAt(
         SPRITE_ATLAS.digits[Number(value[index])],
-        layout.floorDigits.x + index * layout.floorDigits.step,
-        layout.floorDigits.y
+        digits.x + index * digits.step,
+        digits.y
       );
     }
-    this.drawSpriteAt(SPRITE_ATLAS.floorSuffix, layout.floorSuffix.x, layout.floorSuffix.y);
+    this.drawSpriteAt(SPRITE_ATLAS.floorSuffix, suffix.x, suffix.y);
   }
 
   private drawSidebar(state: GameStateSnapshot): void {
@@ -231,7 +291,7 @@ export class Renderer {
       this.drawSpriteAt(
         digit,
         layout.x + index * layout.step,
-        layout.baselineY - digit.height
+        layout.y
       );
     }
   }

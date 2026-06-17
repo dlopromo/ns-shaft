@@ -8,7 +8,22 @@ export const GAME_LAYOUT = {
     lifeBar: { x: 46, y: 28 },
     floorPrefix: { x: 194, y: 12 },
     floorDigits: { x: 262, y: 12, step: 30 },
-    floorSuffix: { x: 382, y: 12 }
+    floorSuffix: { x: 388, y: 12 },
+    twoPlayer: {
+      left: {
+        playerLabel: { x: 32, y: 11 },
+        lifeLabel: { x: 71, y: 12 },
+        lifeBar: { x: 32, y: 28 }
+      },
+      right: {
+        playerLabel: { x: 336, y: 11 },
+        lifeLabel: { x: 370, y: 12 },
+        lifeBar: { x: 336, y: 28 }
+      },
+      floorPrefix: { x: 133, y: 12 },
+      floorDigits: { x: 201, y: 12, step: 30 },
+      floorSuffix: { x: 297, y: 12 }
+    }
   },
   sidebar: {
     x: 447,
@@ -16,7 +31,7 @@ export const GAME_LAYOUT = {
     difficulty: { x: 464, y: 94 },
     difficultyValue: { right: 609, y: 113 },
     record: { x: 464, y: 146 },
-    recordDigits: { x: 541, baselineY: 174, step: 13 },
+    recordDigits: { x: 541, y: 165, step: 13 },
     pause: { x: 512, y: 306, width: 48, height: 46 },
     abort: { x: 512, y: 366, width: 48, height: 46 }
   }
