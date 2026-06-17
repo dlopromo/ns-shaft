@@ -76,9 +76,9 @@ export class Renderer {
     this.ctx.translate(viewport.x, viewport.y);
     this.drawBackground(state.cameraY);
     this.drawWalls();
-    this.drawCeiling();
     for (const platform of state.platforms) this.drawPlatform(platform);
     for (const player of state.players) this.drawPlayer(player, state.timeMs);
+    this.drawCeiling();
     if (state.mode === "paused") {
       this.drawSprite(SPRITE_ATLAS.pause, (viewport.width - 128) / 2, 150);
     }

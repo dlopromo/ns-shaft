@@ -56,7 +56,8 @@ export class GameSimulation {
   private nextPlatformId = 1;
   private nextFloorSequence = 1;
   private events: GameEvent[] = [];
-  private options = { conveyor: true, spring: true, rotating: true };
+  private options = { conveyor: true, spring: true, rotating: true, fast: false };
+  private readonly FAST_MULTIPLIER = 2;
 
   constructor(config: { seed: number; difficulty: Difficulty; players: 1 | 2 }) {
     this.random = new SeededRandom(config.seed);
@@ -136,7 +137,8 @@ export class GameSimulation {
     this.state.timeMs += stepMs;
     this.state.ticks += 1;
     const velocity = this.platformVelocity();
-    this.updatePlatforms(stepMs, velocity);
+    const platformStepMs = this.options.fast ? stepMs * this.FAST_MULTIPLIER : stepMs;
+    this.updatePlatforms(stepMs, platformStepMs, velocity);
     this.state.platforms = this.state.platforms.filter((platform) =>
       platform.y + IPEL_PHYSICS.platformCollisionHeight >= 0
     );
@@ -156,16 +158,17 @@ export class GameSimulation {
 
   private platformVelocity(): number {
     const profile = DIFFICULTIES[this.state.difficulty];
-    return profile.basePlatformVelocity * (1 + this.state.level * 0.1);
+    const base = profile.basePlatformVelocity * (1 + this.state.level * 0.1);
+    return this.options.fast ? base * this.FAST_MULTIPLIER : base;
   }
 
-  private updatePlatforms(stepMs: number, velocity: number): void {
+  private updatePlatforms(moveStepMs: number, timerStepMs: number, velocity: number): void {
     for (const platform of this.state.platforms) {
-      platform.y += velocity * stepMs;
-      platform.ageMs += stepMs;
+      platform.y += velocity * moveStepMs;
+      platform.ageMs += timerStepMs;
       platform.ageTicks += 1;
-      platform.phase = (platform.phase + stepMs / 1000) % 1;
-      if (platform.activationState !== "active") platform.activationAgeMs += stepMs;
+      platform.phase = (platform.phase + timerStepMs / 1000) % 1;
+      if (platform.activationState !== "active") platform.activationAgeMs += timerStepMs;
 
       if (platform.variant === "disappearing" && platform.activationState !== "active") {
         if (platform.activationAgeMs < IPEL_PHYSICS.disappearingHoldMs) {
@@ -318,7 +321,7 @@ export class GameSimulation {
   ): PlatformState | undefined {
     return this.state.platforms.find((platform) =>
       platform.collidable &&
-      (player.springIgnoreAboveY === null || platform.y >= player.springIgnoreAboveY) &&
+      (player.springIgnoreAboveY === null || platform.y >= player.springIgnoreAboveY || platform.variant === "spring") &&
       this.playerOverlapsPlatform(player, platform) &&
       previousFoot <= platform.y - platformVelocity * stepMs &&
       newFoot >= platform.y
@@ -391,7 +394,7 @@ export class GameSimulation {
     const floor = Math.floor(this.state.floorSequence * 0.2);
     if (floor <= this.state.floor) return;
     this.state.floor = floor;
-    this.state.level = Math.floor(floor * 0.1);
+    this.state.level = Math.floor(floor * 0.1) + 1;
   }
 
   private seedInitialPlatforms(): void {
