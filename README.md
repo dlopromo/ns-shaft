@@ -96,13 +96,3 @@ npm run build
 npm run test:browser
 npm run test:cross-browser
 ```
-
-## 授權和資產
-
-本專案參考 [iPel/NS-SHAFT](https://github.com/iPel/NS-SHAFT) 的遊戲架構，相關 attribution 見 [NOTICE](./NOTICE)。
-
-原 NS-SHAFT 視覺和音訊資產屬於原作者 / 權利人。本 repo 內的原版封裝、解包資源和轉換資產只在專案擁有者已聲明具備分析、轉換和使用授權的前提下使用。若要公開發布、再分發或商業使用，請先確認你自己的授權狀態。
-
-## 備註
-
-此專案不是直接移植反編譯程式碼，而是以「靜態逆向 + 受控動態觀察 + clean-room 規格化」方式重建行為。仍未由原系統逐幀證實的物理常數，會在文件或測試中視為暫定行為。

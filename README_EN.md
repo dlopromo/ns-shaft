@@ -96,13 +96,3 @@ npm run build
 npm run test:browser
 npm run test:cross-browser
 ```
-
-## License and Assets
-
-This project references the gameplay architecture from [iPel/NS-SHAFT](https://github.com/iPel/NS-SHAFT). See [NOTICE](./NOTICE) for attribution.
-
-Original NS-SHAFT audiovisual assets belong to their original author / rights holder. The original packages, extracted resources, and converted assets in this repository are used under the project owner's stated authorization to analyze, convert, and use them. Confirm your own rights before public redistribution, publication, or commercial use.
-
-## Notes
-
-This is not a direct port of decompiled program code. It is a reconstruction based on static reverse engineering, controlled dynamic observation, and clean-room specification work. Physics constants that have not yet been proven frame-by-frame against the original runtime should be treated as provisional behavior.
