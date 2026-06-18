@@ -9,6 +9,7 @@
     "test": "vitest run",
     "test:browser": "node tests/browser-qa.mjs",
     "test:cross-browser": "node tests/cross-browser.mjs",
+    "test:firebase": "node tests/firebase-smoke.mjs",
     "test:watch": "vitest",
     "extract:windows": "python3 tools/extract_pe_resources.py nssh13j/NSSHAFT.exe public/assets/extracted",
     "assets:web": "python3 tools/convert_web_assets.py",
@@ -25,6 +26,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@tonejs/midi": "^2.0.28"
+    "@tonejs/midi": "^2.0.28",
+    "firebase": "^12.15.0"
   }
 }

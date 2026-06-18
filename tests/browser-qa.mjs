@@ -7,6 +7,7 @@ const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
 const errors = [];
 const captures = [];
+let state;
 page.on("console", (message) => {
   if (message.type() === "error") errors.push(message.text());
 });
@@ -36,6 +37,80 @@ if (JSON.stringify(canvasGeometry) !== JSON.stringify({
   throw new Error(`Canvas is not native size and centered: ${JSON.stringify(canvasGeometry)}`);
 }
 await capture("01-title-native");
+const menuGeometry = await page.locator(".main-menu").evaluate((menu) => {
+  const online = menu.querySelector('[data-open="online"]').getBoundingClientRect();
+  const records = menu.querySelector('[data-open="records"]').getBoundingClientRect();
+  const options = menu.querySelector('[data-open="options"]').getBoundingClientRect();
+  return {
+    onlineWidth: online.width,
+    recordsTop: records.top,
+    optionsTop: options.top
+  };
+});
+if (menuGeometry.onlineWidth < 250 || menuGeometry.recordsTop !== menuGeometry.optionsTop) {
+  throw new Error(`ONLINE 2P does not span the menu: ${JSON.stringify(menuGeometry)}`);
+}
+const titlePanelSpacing = await page.evaluate(() => {
+  const frame = document.querySelector(".game-frame").getBoundingClientRect();
+  const title = document.querySelector(".title-screen");
+  const art = document.querySelector(".title-art").getBoundingClientRect();
+  const about = document.querySelector('[data-open="about"]').getBoundingClientRect();
+  const panelHeight = Number.parseFloat(getComputedStyle(title, "::before").height);
+  const panelTop = frame.top + (frame.height - panelHeight) / 2;
+  const panelBottom = panelTop + panelHeight;
+  return {
+    top: Math.round(art.top - panelTop),
+    bottom: Math.round(panelBottom - about.bottom)
+  };
+});
+if (titlePanelSpacing.top < 12 || titlePanelSpacing.top > 45 ||
+    titlePanelSpacing.bottom < 12 || titlePanelSpacing.bottom > 30) {
+  throw new Error(`Title panel spacing is unbalanced: ${JSON.stringify(titlePanelSpacing)}`);
+}
+
+await page.getByRole("button", { name: "ONLINE 2P" }).click();
+state = await capture("01b-online-panel");
+if (state.ui !== "online") throw new Error(`Online panel failed: ${state.ui}`);
+const onlineModes = await page.locator("#online-mode option").allTextContents();
+if (JSON.stringify(onlineModes) !== JSON.stringify(["Co-op 2P", "Split Race"])) {
+  throw new Error(`Online modes are incomplete: ${JSON.stringify(onlineModes)}`);
+}
+await page.evaluate(() => window.__nsShaftQa.showOnlineLobby({
+  0: { connected: true, ready: true, name: "HOST" },
+  1: { connected: true, ready: false, name: "GUEST" }
+}, 1));
+const lobbyAudit = await page.evaluate(() => {
+  const host = document.querySelector('[data-player="0"]');
+  const guest = document.querySelector('[data-player="1"]');
+  const ready = document.querySelector("#online-ready");
+  const dialog = document.querySelector(".online-dialog");
+  const screen = document.querySelector("#online-panel");
+  return {
+    hostStatus: host.dataset.status,
+    hostText: host.querySelector("strong").textContent,
+    hostBackground: getComputedStyle(host).backgroundColor,
+    guestStatus: guest.dataset.status,
+    guestText: guest.querySelector("strong").textContent,
+    guestBackground: getComputedStyle(guest).backgroundColor,
+    readyState: ready.dataset.state,
+    readyDisabled: ready.disabled,
+    readyBackground: getComputedStyle(ready).backgroundColor,
+    copyDisabled: document.querySelector("#online-copy").disabled,
+    dialogContained: dialog.getBoundingClientRect().top >= screen.getBoundingClientRect().top &&
+      dialog.getBoundingClientRect().bottom <= screen.getBoundingClientRect().bottom
+  };
+});
+if (lobbyAudit.hostStatus !== "ready" || lobbyAudit.hostText !== "READY" ||
+    lobbyAudit.hostBackground !== "rgb(156, 227, 165)" ||
+    lobbyAudit.guestStatus !== "connected" || lobbyAudit.guestText !== "CONNECTED" ||
+    lobbyAudit.guestBackground !== "rgb(255, 226, 138)" ||
+    lobbyAudit.readyState !== "available" || lobbyAudit.readyDisabled ||
+    lobbyAudit.readyBackground !== "rgb(255, 226, 138)" ||
+    lobbyAudit.copyDisabled || !lobbyAudit.dialogContained) {
+  throw new Error(`Online lobby styling failed: ${JSON.stringify(lobbyAudit)}`);
+}
+await capture("01c-online-lobby-ready");
+await page.getByRole("button", { name: "戻る" }).click();
 
 await page.getByRole("button", { name: "オプション" }).click();
 await page.locator("#difficulty").selectOption("hard");
@@ -61,7 +136,7 @@ await page.waitForTimeout(50);
 await page.getByRole("button", { name: "戻る" }).click();
 
 await page.getByRole("button", { name: "ベスト５" }).click();
-let state = await capture("03-records");
+state = await capture("03-records");
 if (state.ui !== "records") throw new Error(`Records screen failed: ${state.ui}`);
 await page.getByRole("button", { name: "戻る" }).click();
 
@@ -486,6 +561,38 @@ if (state.players.some((player) => player.facing !== "left")) {
   throw new Error(`Falling/hurt facing changed unexpectedly: ${JSON.stringify(state.players)}`);
 }
 
+const deadPlayerMotion = await page.evaluate(() => {
+  window.__nsShaftQa.setPlatforms([{
+    id: 90, x: 100, y: 300, width: 96, kind: "normal",
+    variant: "normal", direction: 1, phase: 0, collidable: true
+  }]);
+  window.__nsShaftQa.setPlayer(0, {
+    alive: true, health: 0, x: 180, y: 180, vy: 0,
+    standingPlatformId: null, standingPlayerId: null
+  });
+  window.__nsShaftQa.setPlayer(1, {
+    alive: true, health: 12, x: 130, y: 300, vy: 0,
+    standingPlatformId: 90, standingPlayerId: null
+  });
+  window.advanceTime(20);
+  const before = JSON.parse(window.render_game_to_text());
+  window.advanceTime(200);
+  const after = JSON.parse(window.render_game_to_text());
+  return {
+    beforeY: before.players[0].y,
+    afterY: after.players[0].y,
+    dead: !after.players[0].alive,
+    survivorAlive: after.players[1].alive,
+    mode: after.mode
+  };
+});
+if (!deadPlayerMotion.dead || !deadPlayerMotion.survivorAlive ||
+    deadPlayerMotion.afterY <= deadPlayerMotion.beforeY ||
+    deadPlayerMotion.mode !== "playing") {
+  throw new Error(`Dead co-op player did not fall away: ${JSON.stringify(deadPlayerMotion)}`);
+}
+await capture("09e-two-player-death-fall");
+
 await page.getByRole("button", { name: "中止遊戲" }).click();
 state = await capture("10-abort-to-title");
 if (state.ui !== "title") throw new Error(`Abort failed: ${state.ui}`);
@@ -523,6 +630,92 @@ if (!fullscreenGeometry.active ||
 }
 await capture("12-integer-scale-ready");
 await page.keyboard.press("KeyF");
+
+await page.getByRole("button", { name: "中止遊戲" }).click();
+await page.setViewportSize({ width: 1400, height: 700 });
+await page.evaluate(() => window.__nsShaftQa.startRace());
+await page.waitForTimeout(60);
+await page.evaluate(() => window.__nsShaftQa.setOnlineRoundPhase("countdown", 5000));
+const countdownTicks = JSON.parse(await page.evaluate(() => window.render_game_to_text())).ticks;
+await page.evaluate(() => window.advanceTime(500));
+state = await capture("13a-online-countdown");
+if (state.online?.phase !== "countdown" || state.ticks !== countdownTicks ||
+    !state.online?.display?.includes("5")) {
+  throw new Error(`Online countdown did not freeze at 5: ${JSON.stringify(state.online)}`);
+}
+await page.evaluate(() => window.__nsShaftQa.setOnlineRoundPhase("playing", -1000));
+state = await capture("13-online-split-race");
+if (state.ui !== "race" || state.race?.local?.players?.length !== 1) {
+  throw new Error(`Split race did not start: ${JSON.stringify(state)}`);
+}
+const raceGeometry = await page.locator(".race-pane").evaluateAll((panes) =>
+  panes.map((pane) => {
+    const canvas = pane.querySelector("canvas");
+    const paneRect = pane.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    return {
+    role: pane.dataset.role,
+    color: pane.dataset.playerColor,
+    width: canvas.width,
+    height: canvas.height,
+    cssWidth: canvasRect.width,
+    cssHeight: canvasRect.height,
+    paneTop: paneRect.top,
+    paneHeight: paneRect.height,
+    visible: canvasRect.width > 0
+  }; })
+);
+if (raceGeometry.length !== 2 || raceGeometry.some((item) =>
+  item.width !== 634 || item.height !== 436 || !item.visible
+) || raceGeometry[0].role !== "local" || raceGeometry[0].color !== "yellow" ||
+    raceGeometry[0].cssWidth !== 634 || raceGeometry[0].cssHeight !== 436 ||
+    raceGeometry[1].role !== "remote" || raceGeometry[1].color !== "green" ||
+    raceGeometry[1].cssWidth !== 317 || raceGeometry[1].cssHeight !== 218 ||
+    Math.abs(
+      raceGeometry[1].paneTop + raceGeometry[1].paneHeight / 2 -
+      (raceGeometry[0].paneTop + raceGeometry[0].paneHeight / 2)
+    ) > 1) {
+  throw new Error(`Split race canvases are invalid: ${JSON.stringify(raceGeometry)}`);
+}
+
+const localStartX = state.race.local.players[0].x;
+await page.keyboard.down("ArrowRight");
+await page.waitForTimeout(100);
+await page.keyboard.up("ArrowRight");
+await page.evaluate(() => window.__nsShaftQa.setRaceRemotePlayer({ x: 88, facing: "left" }));
+state = await capture("13b-online-split-race-motion");
+if (state.race.local.players[0].x <= localStartX ||
+    state.race.remote.players[0].x !== 88) {
+  throw new Error(`Split race motion/snapshot failed: ${JSON.stringify(state.race)}`);
+}
+await page.setViewportSize({ width: 900, height: 700 });
+await page.waitForTimeout(40);
+const responsiveRaceGeometry = await page.locator("#race-stage").evaluate((stage) => {
+  const stageRect = stage.getBoundingClientRect();
+  const canvases = [...stage.querySelectorAll("canvas")].map((canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    return { width: rect.width, right: rect.right };
+  });
+  return { width: stageRect.width, right: stageRect.right, canvases };
+});
+if (responsiveRaceGeometry.width > 900 ||
+    responsiveRaceGeometry.right > 900 ||
+    responsiveRaceGeometry.canvases.some((item) => item.width <= 0 || item.right > 900)) {
+  throw new Error(
+    `Split race does not fit a narrow desktop viewport: ${JSON.stringify(responsiveRaceGeometry)}`
+  );
+}
+await page.evaluate(() => window.__nsShaftQa.setOnlineRoundPhase("results", 3000));
+state = await capture("13c-online-results");
+if (state.online?.phase !== "results" || !state.online?.display) {
+  throw new Error(`Online results overlay is missing: ${JSON.stringify(state.online)}`);
+}
+await page.evaluate(() => window.__nsShaftQa.setOnlineRoundPhase("lobby"));
+state = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
+if (state.ui !== "online" || state.online?.phase !== "lobby" ||
+    await page.locator("#online-ready").isDisabled()) {
+  throw new Error(`Online rematch lobby failed: ${JSON.stringify(state.online)}`);
+}
 
 if (errors.length) throw new Error(`Browser errors: ${errors.join(" | ")}`);
 const report = {

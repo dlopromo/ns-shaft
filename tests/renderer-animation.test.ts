@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
-  playerNeedsMirror, rotatingFrameIndex, springFrameIndex
+  playerNeedsMirror, playerRenderColor, rotatingFrameIndex, springFrameIndex
 } from "../src/game/renderer";
 
 describe("native platform animation timing", () => {
@@ -20,5 +20,11 @@ describe("native platform animation timing", () => {
   test("mirrors the native left-facing character only when moving right", () => {
     expect(playerNeedsMirror("left")).toBe(false);
     expect(playerNeedsMirror("right")).toBe(true);
+  });
+
+  test("can render an opponent with the native 2P color without changing state", () => {
+    expect(playerRenderColor("yellow", undefined)).toBe("yellow");
+    expect(playerRenderColor("yellow", "green")).toBe("green");
+    expect(playerRenderColor("green", "yellow")).toBe("yellow");
   });
 });

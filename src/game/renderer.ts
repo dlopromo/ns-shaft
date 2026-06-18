@@ -27,6 +27,13 @@ export function playerNeedsMirror(facing: PlayerState["facing"]): boolean {
   return facing === "right";
 }
 
+export function playerRenderColor(
+  color: PlayerState["color"],
+  override: PlayerState["color"] | undefined
+): PlayerState["color"] {
+  return override ?? color;
+}
+
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private main = new Image();
@@ -36,6 +43,7 @@ export class Renderer {
   private lastState: GameStateSnapshot | null = null;
   private fast = false;
   private recordFloor = 0;
+  private playerColorOverride: PlayerState["color"] | undefined;
 
   constructor(private canvas: HTMLCanvasElement) {
     canvas.width = LOGICAL_WIDTH;
@@ -55,9 +63,14 @@ export class Renderer {
     this.frame.src = `${import.meta.env.BASE_URL}assets/web/rt_bitmap-106-1041.png`;
   }
 
-  configure(options: { fast: boolean; recordFloor?: number }): void {
+  configure(options: {
+    fast: boolean;
+    recordFloor?: number;
+    playerColorOverride?: PlayerState["color"];
+  }): void {
     this.fast = options.fast;
     if (options.recordFloor !== undefined) this.recordFloor = options.recordFloor;
+    this.playerColorOverride = options.playerColorOverride;
     if (this.lastState) this.render(this.lastState);
   }
 
@@ -108,9 +121,10 @@ export class Renderer {
     if (!this.native.complete) return;
     if (player.hurtUntilMs > timeMs && Math.floor(timeMs / 100) % 2 === 1) return;
     const hurt = player.hurtUntilMs > timeMs;
+    const color = playerRenderColor(player.color, this.playerColorOverride);
     const frames = hurt
-      ? SPRITE_ATLAS.hurtPlayers[player.color]
-      : SPRITE_ATLAS.players[player.color];
+      ? SPRITE_ATLAS.hurtPlayers[color]
+      : SPRITE_ATLAS.players[color];
     const animation = player.pose === "dead" ? "dead" :
       player.pose === "hurt" ? "side" :
       player.pose === "jump" || player.pose === "fall" ? "jump" :

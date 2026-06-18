@@ -8,6 +8,7 @@ The current build is playable in desktop browsers at the original `634x436` logi
 
 - Original title, copyright, frame, background, walls, spikes, HUD, digits, and record glyphs
 - Local 1P and 2P modes
+- Experimental Online 2P with six-digit room codes, lockstep co-op, and a Split Race that shows the opponent's live game
 - Normal, conveyor, rotating/disappearing, spring, spike, and ceiling hazards
 - 12-state LIFE, floor counter, sidebar difficulty, and RECORD display
 - Original WAVE effect mapping and MIDI BGM playback
@@ -46,16 +47,53 @@ npm run research
 
 - 1P: left and right arrow keys
 - 2P: 1P uses arrow keys, 2P uses `Z` / `X`
+- Online 2P: select `Co-op 2P` or `Split Race`; creating a room automatically copies its six-digit code, then both players press Ready for a five-second countdown
 - `Esc`: pause / resume
 - `F`: fullscreen
 
 The goal is to avoid the ceiling spikes and dangerous platforms while descending as far as possible.
+
+## Online 2P Setup
+
+Online mode uses Firebase Realtime Database as a lightweight sync layer. Do not paste Firebase API keys or config values into chat, and do not commit them to the repository. Create a local `.env.local` instead:
+
+```bash
+cp .env.example .env.local
+```
+
+Then fill in your Firebase web app config:
+
+```env
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_DATABASE_URL=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_APP_ID=...
+```
+
+Two WAN room modes are available:
+
+- `Co-op 2P`: both players interact in one shared game using fixed-delay lockstep input. A defeated player keeps falling out of view while the survivor continues; Game Over starts only after both players are defeated.
+- `Split Race`: your original-size `634x436` cabinet is paired with the opponent's exact 50% `317x218` cabinet on the right. Each player sees themselves as the yellow 1P character and the opponent as the green 2P character. Both use the same seed, difficulty, and mechanisms while running independent responsive 1P simulations. Snapshots are exchanged about every `100ms`, with a `100ms` interpolation buffer for remote motion.
+
+After both players are Ready, the host uses Firebase server time for a synchronized `5, 4, 3, 2, 1, GO`. Co-op ends after both players die; in Split Race the first finisher watches the opponent until both finish. Results remain visible for three seconds, then both modes return to the same room with settings preserved and Ready reset. Abort is reserved for leaving the room.
+
+P1/P2 lobby rows use gray, yellow, and green for waiting, connected, and ready. Room creation attempts to copy the code automatically; if clipboard permission is denied, `Copy Code` retries and the selected code remains available for manual copying.
+
+Online scores are not written to the local Best 5 yet, to keep the original single-player record flow clean.
+
+With the local app running at `http://127.0.0.1:5175`, `npm run test:firebase`
+opens two isolated browser contexts and exercises room creation, clipboard copy,
+joining, Ready, countdown, live synchronization, results, same-room rematches,
+and cleanup in both modes. This test
+briefly creates real Firebase rooms.
 
 ## Project Layout
 
 ```text
 src/
   game/          Game logic, rendering, audio, input, save data, and layout
+  game/online/   Firebase rooms, six-digit codes, and deterministic lockstep
 tests/           Vitest unit tests and Playwright/browser QA scripts
 tools/           Resource extraction, conversion, analysis, and sprite generation
 public/assets/   Extracted resources, browser-ready assets, and BGM
@@ -69,6 +107,7 @@ Key files:
 - [src/game/renderer.ts](./src/game/renderer.ts): native-size Canvas renderer and HUD
 - [src/game/atlas.ts](./src/game/atlas.ts): original sprite source rectangles, anchors, and collision data
 - [src/game/layout.ts](./src/game/layout.ts): coordinate layout inside the 634x436 original frame
+- [src/game/online/](./src/game/online/): Online 2P room/session/lockstep/controller code
 - [tests/browser-qa.mjs](./tests/browser-qa.mjs): browser flow, pixel audit, and screenshot coverage
 
 ## Platform Generation Rules

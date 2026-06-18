@@ -148,6 +148,39 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
 - Restored the previous spring launch timing and strength while preventing
   spring launches from landing on any platform above the launch point until the
   player falls back below that launch height.
+- Added the first Online 2P implementation: Firebase Realtime Database rooms,
+  anonymous six-digit numeric room codes, local `.env.local` configuration,
+  host/guest ready flow, deterministic two-player lockstep input buffering and
+  browser QA coverage for missing Firebase configuration.
+- Added Online Split Race as the second WAN mode. Both players run independent
+  responsive one-player simulations with the same seed and settings, while two
+  native 634x436 canvases show local and opponent gameplay side by side.
+  Renderer-safe snapshots update about every 100ms, stale opponents show a
+  waiting overlay, pause/game-over transitions publish once, and only local
+  game events produce audio.
+- Improved Online room flow with automatic room-code clipboard copy, a manual
+  fallback, locked room settings, colored P1/P2 connection states and explicit
+  Ready feedback. Co-op defeated players now fall out of view while survivors
+  continue, and Split Race renders remote motion through a bounded 100ms
+  interpolation buffer while keeping authoritative results unchanged.
+- Added a real Firebase two-context smoke test. It verifies numeric room codes,
+  clipboard copy, host/guest lobby state, both Ready actions, Co-op lockstep,
+  Split Race remote snapshots and automatic test-room deletion.
+- Separated Co-op input sequence and simulation sequence so a late packet is
+  retried instead of permanently skipping its tick; asymmetric-delay coverage
+  now proves both clients converge on the same deterministic state.
+- Reduced the title dialog to 300px high and moved the native 288x140 title art
+  clear of the first menu row without scaling the source image.
+- Preserved the original 634x436 cabinet identity in Split Race: the local
+  machine remains native size and the opponent is an exact 317x218 half-size
+  machine, vertically centered. The remote renderer uses the original green 2P
+  sprites while each local player remains the yellow 1P character.
+- Added a server-time synchronized five-second Online countdown, a three-second
+  results phase, and automatic same-room rematches with settings preserved and
+  both Ready flags reset. Co-op resolves after both deaths; Split Race lets the
+  first finisher watch until the opponent also finishes.
+- Made ONLINE 2P span both title-menu columns and extended browser/Firebase QA
+  through countdown freeze, live play, result display and round-two Ready flow.
 
 ## Remaining
 

@@ -124,6 +124,50 @@ Playing --> GameOver: no living players
   GameOver --> Title: Enter
 ```
 
+## Online 2P Architecture
+
+Online 2P is implemented as a browser-native extension around the deterministic
+simulation rather than a new ruleset. The host creates a Firebase Realtime
+Database room with a six-digit numeric code, mode, selected difficulty,
+mechanism flags and a shared seed. The guest joins the same room and both
+players press Ready before the host starts a five-second countdown using the
+Firebase server-time offset. The room lifecycle is `lobby -> countdown ->
+playing -> results -> lobby`; each new round receives a fresh seed.
+
+Co-op rooms write each browser's local left/right/pause input for every tick.
+`OnlineLockstepController` waits for both players' inputs at a fixed delay and
+then advances the shared two-player `GameSimulation`. A dead player remains in
+the simulation long enough for gravity to carry the body below the playfield;
+the surviving player continues and the shared game ends only when nobody is
+alive.
+
+Split Race rooms run one independent one-player simulation per browser. The
+local cabinet remains at the original 634x436 size while the opponent cabinet
+is rendered at an exact 317x218 CSS size. Renderer color override makes the
+remote character use the original green 2P frames without mutating synchronized
+simulation state. Local
+input advances immediately, while a detached renderer-safe `RaceSnapshot` is
+written every six ticks (about 100ms) and rendered on the opponent canvas.
+Remote snapshot delay never blocks local simulation. Rendering keeps the two
+latest remote snapshots and interpolates them behind a 100ms local-time buffer;
+stale packets are discarded and authoritative result checks continue to use the
+latest uninterpolated snapshot. Only local events feed the audio system. Both
+online modes keep the Windows 1.3J assets and rules as their behavioral base,
+and online results remain outside the local Best 5.
+
+Normal completion does not leave the room. Co-op waits until both players are
+dead; Split Race lets a finished player spectate until both runs finish. The
+host publishes a three-second results phase, then clears both Ready flags and
+returns the same room to its lobby with mode, difficulty and mechanisms intact.
+
+The lobby locks mode/name/code controls after entering a room, shows distinct
+waiting/connected/ready rows for P1 and P2, and keeps Ready as an explicit local
+action. Room creation first attempts a Clipboard API write and retains a manual
+`Copy Code` fallback if browser permission is unavailable.
+
+Firebase configuration is read only from local Vite environment variables
+(`.env.local`). The repository includes `.env.example` but no project keys.
+
 ## Reproduction Commands
 
 ```bash
@@ -136,6 +180,8 @@ npm run assets:objects
 npm test
 npm run test:browser
 npm run test:cross-browser
+# With the dev server running on port 5175 and local Firebase env configured:
+npm run test:firebase
 sh tools/unpack_mac.sh
 ```
 

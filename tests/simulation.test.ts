@@ -124,6 +124,35 @@ describe("GameSimulation gameplay rules", () => {
     expect(upper.standingPlayerId).toBe(lower.id);
   });
 
+  test("a dead co-op player falls out while the survivor keeps playing", () => {
+    const game = new GameSimulation({ seed: 64, difficulty: "normal", players: 2 });
+    game.debugSetPlatforms([{
+      id: 1, x: 100, y: 300, width: 96, kind: "normal",
+      variant: "normal", direction: 1, phase: 0, collidable: true
+    }]);
+    game.debugSetPlayer(0, {
+      x: 150, y: 180, vy: 0, health: 0, standingPlatformId: null
+    });
+    game.debugSetPlayer(1, {
+      x: 130, y: 300, vy: 0, health: 12, standingPlatformId: 1
+    });
+
+    game.step(idle, 20);
+    const deathY = game.snapshot().players[0].y;
+    expect(game.snapshot()).toMatchObject({
+      mode: "playing",
+      players: [{ alive: false, pose: "dead" }, { alive: true }]
+    });
+
+    game.step(idle, 200);
+    expect(game.snapshot().players[0].y).toBeGreaterThan(deathY);
+    expect(game.snapshot().mode).toBe("playing");
+
+    game.debugSetPlayer(1, { health: 0 });
+    game.step(idle, 20);
+    expect(game.snapshot().mode).toBe("gameover");
+  });
+
   test("uses a walking pose while moving left or right on a floor", () => {
     const game = new GameSimulation({ seed: 8, difficulty: "normal", players: 1 });
     game.debugSetPlatforms([{

@@ -207,7 +207,15 @@ export class GameSimulation {
     stepMs: number,
     platformVelocity: number
   ): void {
-    if (!player.alive) return;
+    if (!player.alive) {
+      this.updateDeadPlayer(player, stepMs);
+      return;
+    }
+    if (player.health <= 0) {
+      this.killPlayer(player);
+      this.updateDeadPlayer(player, stepMs);
+      return;
+    }
     const direction = Number(input.right) - Number(input.left);
     if (direction !== 0) player.facing = direction < 0 ? "left" : "right";
     const control = direction * IPEL_PHYSICS.controlVelocity;
@@ -293,14 +301,25 @@ export class GameSimulation {
     }
 
     this.resolveCeiling(player);
-    if (player.y > HEIGHT + player.height || player.health <= 0) {
-      player.alive = false;
-      player.pose = "dead";
-      player.standingPlatformId = null;
-      player.standingPlayerId = null;
-      player.springIgnoreAboveY = null;
-      this.events.push({ type: "death", playerId: player.id });
-    }
+    if (player.y > HEIGHT + player.height) this.killPlayer(player);
+  }
+
+  private killPlayer(player: PlayerState): void {
+    if (!player.alive) return;
+    player.alive = false;
+    player.pose = "dead";
+    player.standingPlatformId = null;
+    player.standingPlayerId = null;
+    player.springIgnoreAboveY = null;
+    this.events.push({ type: "death", playerId: player.id });
+  }
+
+  private updateDeadPlayer(player: PlayerState, stepMs: number): void {
+    if (player.y > HEIGHT + player.height) return;
+    player.y += player.vy * stepMs +
+      0.5 * IPEL_PHYSICS.gravity * stepMs * stepMs;
+    player.vy += IPEL_PHYSICS.gravity * stepMs;
+    player.pose = "dead";
   }
 
   private findPlayerLanding(
