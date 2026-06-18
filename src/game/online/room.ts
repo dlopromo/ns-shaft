@@ -17,15 +17,15 @@ const FIREBASE_ENV_KEYS = [
 ] as const;
 
 export function generateRoomCode(random = Math.random): string {
-  const value = Math.min(999999, Math.floor(Math.max(0, random()) * 1_000_000));
-  return String(value).padStart(6, "0");
+  const value = Math.min(9999, Math.floor(Math.max(0, random()) * 10_000));
+  return String(value).padStart(4, "0");
 }
 
 export function validateRoomCode(input: string): { ok: true; code: string } |
   { ok: false; reason: string } {
   const code = input.trim();
-  if (/^\d{6}$/.test(code)) return { ok: true, code };
-  return { ok: false, reason: "Room code must be 6 digits" };
+  if (/^\d{4}$/.test(code)) return { ok: true, code };
+  return { ok: false, reason: "Room code must be 4 digits" };
 }
 
 export function buildFirebaseConfig(env: Env): FirebaseConfig {

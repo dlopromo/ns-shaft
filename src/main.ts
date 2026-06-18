@@ -137,7 +137,7 @@ root.innerHTML = `
       <section id="online-panel" class="screen dialog-screen" hidden>
         <div class="dialog online-dialog">
           <h2>ONLINE 2P</h2>
-          <p id="online-status">Create a room or join with a 6 digit code.</p>
+          <p id="online-status">Create a room or join with a 4 digit code.</p>
           <label>Mode
             <select id="online-mode">
               <option value="coop">Co-op 2P</option>
@@ -157,7 +157,7 @@ root.innerHTML = `
             <button id="online-create" type="button">Create Room</button>
             <button id="online-ready" type="button" data-state="available" disabled>Ready</button>
           </div>
-          <label>Room Code <input id="online-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off"></label>
+          <label>Room Code <input id="online-code" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label>
           <div class="dialog-actions">
             <button id="online-join" type="button">Join Room</button>
             <button id="online-copy" type="button" disabled>Copy Code</button>
@@ -178,6 +178,14 @@ root.innerHTML = `
           <label>名前 <input id="player-name" maxlength="12" autocomplete="off"></label>
           <button type="submit">登録</button>
         </form>
+      </section>
+
+      <section id="online-scoreboard" class="screen dialog-screen" hidden>
+        <div class="dialog">
+          <h2 id="scoreboard-title">GAME OVER</h2>
+          <p id="scoreboard-detail"></p>
+          <button id="scoreboard-lobby">戻る</button>
+        </div>
       </section>
     </section>
     <section id="race-stage" class="race-stage" aria-label="Online split-screen race" hidden>
@@ -208,6 +216,10 @@ const recordsPanel = document.querySelector<HTMLElement>("#records-panel")!;
 const onlinePanel = document.querySelector<HTMLElement>("#online-panel")!;
 const aboutPanel = document.querySelector<HTMLElement>("#about-panel")!;
 const namePanel = document.querySelector<HTMLElement>("#name-panel")!;
+const scoreboardPanel = document.querySelector<HTMLElement>("#online-scoreboard")!;
+const scoreboardTitle = document.querySelector<HTMLElement>("#scoreboard-title")!;
+const scoreboardDetail = document.querySelector<HTMLElement>("#scoreboard-detail")!;
+const scoreboardLobby = document.querySelector<HTMLButtonElement>("#scoreboard-lobby")!;
 const difficulty = document.querySelector<HTMLSelectElement>("#difficulty")!;
 const onlineStatus = document.querySelector<HTMLElement>("#online-status")!;
 const onlineMode = document.querySelector<HTMLSelectElement>("#online-mode")!;
@@ -288,6 +300,7 @@ function closePanels(): void {
   onlinePanel.hidden = true;
   aboutPanel.hidden = true;
   namePanel.hidden = true;
+  scoreboardPanel.hidden = true;
 }
 
 async function start(players: 1 | 2): Promise<void> {
@@ -430,19 +443,46 @@ function setOnlineStatus(
   onlineStatus.dataset.tone = tone;
 }
 
-function setOnlineControlsLocked(locked: boolean): void {
-  onlineMode.disabled = locked;
-  onlineName.disabled = locked;
-  onlineCode.readOnly = locked;
-  onlineCreate.disabled = locked;
-  onlineJoin.disabled = locked;
-  onlineCopy.disabled = !locked;
-  if (!locked) {
-    onlinePlayers.hidden = true;
-    onlineReady.disabled = true;
-    onlineReady.dataset.state = "available";
-    onlineReady.textContent = "Ready";
+function enterOnlineRoom(role: "host" | "guest"): void {
+  onlineCreate.hidden = true;
+  onlineJoin.hidden = true;
+  onlineCode.closest("label")!.hidden = true;
+  onlineName.disabled = true;
+  onlinePlayers.hidden = false;
+  onlineReady.disabled = true;
+  onlineReady.dataset.state = "available";
+  onlineReady.textContent = "Ready";
+  // ponytail: host can change mode, guest sees it read-only
+  const modeLabel = onlineMode.closest("label")!;
+  modeLabel.hidden = false;
+  if (role === "host") {
+    onlineMode.disabled = false;
+    onlineCopy.hidden = false;
+    onlineCopy.disabled = false;
+  } else {
+    onlineMode.disabled = true;
+    onlineCopy.hidden = true;
+    onlineCopy.disabled = true;
   }
+}
+
+function exitOnlineRoom(): void {
+  onlineCode.classList.remove("error");
+  onlineCreate.hidden = false;
+  onlineCreate.disabled = false;
+  onlineJoin.hidden = false;
+  onlineJoin.disabled = false;
+  onlineCode.closest("label")!.hidden = false;
+  onlineCode.readOnly = false;
+  onlineMode.closest("label")!.hidden = false;
+  onlineMode.disabled = false;
+  onlineName.disabled = false;
+  onlineCopy.hidden = false;
+  onlineCopy.disabled = true;
+  onlinePlayers.hidden = true;
+  onlineReady.disabled = true;
+  onlineReady.dataset.state = "available";
+  onlineReady.textContent = "Ready";
 }
 
 function renderOnlineLobby(room: LobbyRoomData, localPlayerId: 0 | 1): void {
@@ -492,9 +532,26 @@ function showOnlineRoomLobby(room: OnlineRoomHandle, roomData: OnlineRoomData): 
   cabinet.classList.remove("race-active");
   pauseControl.hidden = true;
   abortControl.hidden = true;
-  setOnlineControlsLocked(true);
+  enterOnlineRoom(room.role);
   renderOnlineLobby(roomData, room.playerId);
   updateFullscreenScale();
+}
+
+function showOnlineScoreboard(): void {
+  let title = "GAME OVER";
+  let detail = "";
+  if (onlineRace) {
+    const local = onlineRace.localSnapshot();
+    const remote = onlineRace.remoteSnapshot();
+    title = onlineRaceResult(local.floor, remote?.floor ?? 0);
+    detail = `YOU ${local.floor} · OPPONENT ${remote?.floor ?? "--"}`;
+  } else if (onlineGame) {
+    detail = `Floor ${onlineGame.snapshot().floor}`;
+  }
+  closePanels();
+  scoreboardTitle.textContent = title;
+  scoreboardDetail.textContent = detail;
+  scoreboardPanel.hidden = false;
 }
 
 function onlineRoundFinished(): boolean {
@@ -563,7 +620,7 @@ async function leaveOnlineRoom(): Promise<void> {
   onlinePhase = null;
   onlinePreparedRound = -1;
   onlineTransitionPending = false;
-  setOnlineControlsLocked(false);
+  exitOnlineRoom();
   if (room && session) {
     await session.leaveRoom(room.roomCode, room.playerId).catch(() => undefined);
   }
@@ -589,8 +646,11 @@ function subscribeOnlineRoom(room: OnlineRoomHandle): void {
     onlineRoomData = roomData;
     onlinePhase = phase;
     renderOnlineLobby(roomData, room.playerId);
+    if (roomData.meta?.mode) onlineMode.value = roomData.meta.mode;
     if (phase === "lobby") {
-      if (onlineGame || onlineRace || previousPhase === "results") {
+      if (previousPhase === "results") {
+        showOnlineScoreboard();
+      } else if (onlineGame || onlineRace) {
         showOnlineRoomLobby(room, roomData);
       }
       setOnlineStatus(
@@ -746,12 +806,12 @@ function drawCanvasOverlay(target: HTMLCanvasElement, titleText: string, detail:
   if (!context) return;
   context.save();
   context.fillStyle = "rgba(0, 0, 0, .72)";
-  context.fillRect(148, 178, 338, 58);
+  context.fillRect(63, 211, 338, 58);
   context.fillStyle = "#fff";
   context.font = "16px monospace";
-  context.fillText(titleText, 218, 202);
+  context.fillText(titleText, 133, 240);
   context.font = "12px monospace";
-  context.fillText(detail, 218, 220);
+  context.fillText(detail, 133, 258);
   context.restore();
 }
 
@@ -830,12 +890,12 @@ function drawOnlineWaiting(): void {
   if (!context) return;
   context.save();
   context.fillStyle = "rgba(0, 0, 0, .65)";
-  context.fillRect(148, 178, 338, 58);
+  context.fillRect(63, 211, 338, 58);
   context.fillStyle = "#fff";
   context.font = "16px monospace";
-  context.fillText("ONLINE WAITING", 238, 202);
+  context.fillText("ONLINE WAITING", 153, 240);
   context.font = "12px monospace";
-  context.fillText(`missing P${status.lockstep.missingPlayers.map((id) => id + 1).join(", P")}`, 238, 220);
+  context.fillText(`missing P${status.lockstep.missingPlayers.map((id) => id + 1).join(", P")}`, 153, 258);
   context.restore();
 }
 
@@ -850,8 +910,8 @@ document.querySelectorAll<HTMLButtonElement>("[data-open]").forEach((button) => 
     if (panel === "online") {
       onlinePanel.hidden = false;
       onlineName.value = save.lastInputName;
-      setOnlineControlsLocked(false);
-      setOnlineStatus("Create a room or join with a 6 digit code.");
+      exitOnlineRoom();
+      setOnlineStatus("Create a room or join with a 4 digit code.");
     }
     if (panel === "records") {
       renderRecords();
@@ -891,6 +951,13 @@ document.querySelector("#clear-records")!.addEventListener("click", () => {
 });
 onlineCreate.addEventListener("click", async () => {
   try {
+    const codeInput = onlineCode.value.trim();
+    if (codeInput && !/^\d{4}$/.test(codeInput)) {
+      onlineCode.classList.add("error");
+      setOnlineStatus("Room code must be 4 digits", "error");
+      return;
+    }
+    onlineCode.classList.remove("error");
     onlineCreate.disabled = true;
     setOnlineStatus("Creating room...");
     const session = getOnlineSession();
@@ -905,11 +972,12 @@ onlineCreate.addEventListener("click", async () => {
         spring: save.settings.spring,
         rotating: save.settings.rotating,
         fast: save.settings.fast
-      }
+      },
+      roomCode: codeInput || undefined
     });
     onlineRoom = room;
     onlineCode.value = room.roomCode;
-    setOnlineControlsLocked(true);
+    enterOnlineRoom("host");
     renderOnlineLobby({
       players: { 0: { connected: true, ready: false, name: onlinePlayerName() } }
     }, room.playerId);
@@ -934,7 +1002,7 @@ onlineJoin.addEventListener("click", async () => {
     onlineServerOffsetMs = await session.getServerTimeOffset().catch(() => 0);
     const room = await session.joinRoom(validation.code, onlinePlayerName());
     onlineRoom = room;
-    setOnlineControlsLocked(true);
+    enterOnlineRoom("guest");
     subscribeOnlineRoom(room);
     setOnlineStatus(`Joined room ${room.roomCode}. Press Ready.`);
   } catch (error) {
@@ -966,12 +1034,29 @@ onlineReady.addEventListener("click", async () => {
     );
   }
 });
+onlineCode.addEventListener("input", () => onlineCode.classList.remove("error"));
 onlineCopy.addEventListener("click", () => void copyCurrentRoomCode());
+onlineMode.addEventListener("change", async () => {
+  if (!onlineRoom || onlineRoom.role !== "host" || onlinePhase !== "lobby") return;
+  const mode = onlineMode.value as OnlineRoomMode;
+  onlineRoom.mode = mode;
+  try {
+    await getOnlineSession().updateMeta(onlineRoom.roomCode, { mode });
+  } catch {
+    // ponytail: silent fail, local mode already set for next round
+  }
+});
 pauseControl.addEventListener("click", togglePause);
 abortControl.addEventListener("click", () => {
   if (game || onlineGame) {
     audio.playEffect("abort");
     showTitle();
+  }
+});
+scoreboardLobby.addEventListener("click", () => {
+  scoreboardPanel.hidden = true;
+  if (onlineRoom && onlineRoomData) {
+    showOnlineRoomLobby(onlineRoom, onlineRoomData);
   }
 });
 racePause.addEventListener("click", togglePause);
@@ -1023,7 +1108,8 @@ window.render_game_to_text = () => JSON.stringify({
   coordinateSystem: "origin top-left; +x right; +y down; frame 634x436; playfield 420x356 at (22,62)",
   ui: !title.hidden ? "title" : !optionsPanel.hidden ? "options" :
     !recordsPanel.hidden ? "records" : !onlinePanel.hidden ? "online" :
-      !namePanel.hidden ? "name-entry" : onlineRace ? "race" : "game",
+      !namePanel.hidden ? "name-entry" : !scoreboardPanel.hidden ? "scoreboard" :
+        onlineRace ? "race" : "game",
   ...((game ?? onlineGame)?.snapshot() ?? onlineRace?.localSnapshot() ?? { mode: "title" }),
   online: onlineRoom ? {
     roomCode: onlineRoom.roomCode,
@@ -1123,7 +1209,7 @@ if (qaMode) {
         mode: "coop"
       };
       onlineCode.value = "123456";
-      setOnlineControlsLocked(true);
+      enterOnlineRoom(localPlayerId === 0 ? "host" : "guest");
       renderOnlineLobby({ players }, localPlayerId);
     }
   };

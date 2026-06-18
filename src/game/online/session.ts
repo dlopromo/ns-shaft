@@ -17,6 +17,7 @@ export interface CreateRoomOptions {
   difficulty: Difficulty;
   mode: OnlineRoomMode;
   options: OnlineMechanismOptions;
+  roomCode?: string;
 }
 
 export interface OnlineRoomHandle {
@@ -47,31 +48,44 @@ export class FirebaseOnlineSession {
   ) {}
 
   async createRoom(options: CreateRoomOptions): Promise<OnlineRoomHandle> {
+    const requested = options.roomCode?.trim();
+    if (requested) {
+      const metaPath = this.metaPath(requested);
+      if (await this.database.get(metaPath)) throw new Error("Room already exists");
+      await this.writeRoomMeta(metaPath, requested, options);
+      return { roomCode: requested, role: "host", playerId: 0, mode: options.mode };
+    }
     for (let attempt = 0; attempt < 10; attempt += 1) {
       const roomCode = this.codeGenerator();
       const metaPath = this.metaPath(roomCode);
       if (await this.database.get(metaPath)) continue;
-      await this.database.set(metaPath, {
-        seed: options.seed,
-        difficulty: options.difficulty,
-        mode: options.mode,
-        options: options.options,
-        phase: "lobby",
-        round: 0,
-        hostConnected: true,
-        guestConnected: false,
-        createdAt: Date.now()
-      });
-      await this.database.set(this.playerPath(roomCode, 0), {
-        name: options.playerName || "HOST",
-        role: "host",
-        ready: false,
-        connected: true
-      });
-      this.database.onDisconnectRemove(`rooms/${roomCode}`);
+      await this.writeRoomMeta(metaPath, roomCode, options);
       return { roomCode, role: "host", playerId: 0, mode: options.mode };
     }
     throw new Error("Unable to allocate room code");
+  }
+
+  private async writeRoomMeta(
+    metaPath: string, roomCode: string, options: CreateRoomOptions
+  ): Promise<void> {
+    await this.database.set(metaPath, {
+      seed: options.seed,
+      difficulty: options.difficulty,
+      mode: options.mode,
+      options: options.options,
+      phase: "lobby",
+      round: 0,
+      hostConnected: true,
+      guestConnected: false,
+      createdAt: Date.now()
+    });
+    await this.database.set(this.playerPath(roomCode, 0), {
+      name: options.playerName || "HOST",
+      role: "host",
+      ready: false,
+      connected: true
+    });
+    this.database.onDisconnectRemove(`rooms/${roomCode}`);
   }
 
   async joinRoom(roomCodeInput: string, playerName: string): Promise<OnlineRoomHandle> {

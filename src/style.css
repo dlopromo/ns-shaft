@@ -280,6 +280,10 @@ canvas {
 .online-dialog input {
   width: 145px;
 }
+.online-dialog input.error {
+  border: 2px solid #c00;
+  outline: none;
+}
 .online-players {
   display: grid;
   gap: 4px;

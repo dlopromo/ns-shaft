@@ -1,6 +1,6 @@
 export const ONLINE_COUNTDOWN_MS = 5000;
 export const ONLINE_GO_MS = 500;
-export const ONLINE_RESULTS_MS = 3000;
+export const ONLINE_RESULTS_MS = 5000;
 
 export type OnlineRoomPhase = "lobby" | "countdown" | "playing" | "results" | "ended";
 export type OnlineHostAction =
