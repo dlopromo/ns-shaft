@@ -3,7 +3,7 @@ import { GAME_LAYOUT } from "./layout";
 import { SeededRandom } from "./random";
 import type {
   Difficulty, GameEvent, GameStateSnapshot, InputFrame, PlatformKind,
-  PlatformState, PlatformVariant, PlayerState
+  PlatformState, PlatformVariant, PlayerState, SimulationCheckpoint
 } from "./types";
 
 export const IPEL_PHYSICS = {
@@ -104,6 +104,26 @@ export class GameSimulation {
 
   snapshot(): GameStateSnapshot {
     return structuredClone(this.state);
+  }
+
+  exportCheckpoint(): SimulationCheckpoint {
+    return structuredClone({
+      state: this.state,
+      randomState: this.random.exportState(),
+      nextPlatformId: this.nextPlatformId,
+      nextFloorSequence: this.nextFloorSequence,
+      options: this.options
+    });
+  }
+
+  applyCheckpoint(checkpoint: SimulationCheckpoint): void {
+    const value = structuredClone(checkpoint);
+    this.state = value.state;
+    this.random.importState(value.randomState);
+    this.nextPlatformId = value.nextPlatformId;
+    this.nextFloorSequence = value.nextFloorSequence;
+    this.options = value.options;
+    this.events = [];
   }
 
   setOptions(options: Partial<typeof this.options>): void {

@@ -1,8 +1,15 @@
 import type { Difficulty, PlayerInput } from "../types";
 import type { RaceSnapshot } from "./race";
+import type {
+  InputBatch,
+  NetworkTimingSample,
+  OnlineCheckpoint,
+  OnlineSyncStatus
+} from "./sync";
 import { generateRoomCode, validateRoomCode } from "./room";
 
 export const FIREBASE_ROOT = "ns-shaft";
+export const RECONNECT_GRACE_MS = 60_000;
 
 export type OnlineRoomMode = "coop" | "race";
 
@@ -36,8 +43,12 @@ export interface OnlineDatabasePort {
   update(path: string, value: Record<string, unknown>): Promise<void>;
   remove(path: string): Promise<void>;
   onValue(path: string, callback: (value: unknown) => void): () => void;
+  onChild(path: string, callback: (value: unknown) => void): () => void;
   onDisconnectRemove(path: string): void;
+  onDisconnectSet(path: string, value: unknown): Promise<void>;
+  cancelOnDisconnect(path: string): Promise<void>;
   getServerTimeOffset(): Promise<number>;
+  serverTimestamp(): unknown;
 }
 
 export interface NetworkInput extends PlayerInput {
@@ -47,7 +58,8 @@ export interface NetworkInput extends PlayerInput {
 export class FirebaseOnlineSession {
   constructor(
     private readonly database: OnlineDatabasePort,
-    private readonly codeGenerator = generateRoomCode
+    private readonly codeGenerator = generateRoomCode,
+    private readonly now = Date.now
   ) {}
 
   async createRoom(options: CreateRoomOptions): Promise<OnlineRoomHandle> {
@@ -88,9 +100,10 @@ export class FirebaseOnlineSession {
       uid,
       role: "host",
       ready: false,
-      connected: true
+      connected: true,
+      lastSeen: this.database.serverTimestamp()
     });
-    this.database.onDisconnectRemove(this.roomPath(roomCode));
+    await this.armPresenceDisconnect(roomCode, 0);
   }
 
   async joinRoom(roomCodeInput: string, playerName: string): Promise<OnlineRoomHandle> {
@@ -102,17 +115,111 @@ export class FirebaseOnlineSession {
       { phase?: string; guestConnected?: boolean; mode?: OnlineRoomMode } | null;
     if (!meta) throw new Error("Room not found");
     if (meta.phase !== "lobby") throw new Error("Room is not in lobby");
-    if (meta.guestConnected) throw new Error("Room is full");
+    if (meta.guestConnected) {
+      const guest = await this.database.get(this.playerPath(roomCode, 1)) as {
+        connected?: boolean;
+        lastSeen?: number;
+      } | null;
+      const slotReserved = guest?.connected || typeof guest?.lastSeen !== "number" ||
+        this.now() - guest.lastSeen <= RECONNECT_GRACE_MS;
+      if (slotReserved) throw new Error("Room is full");
+    }
     await this.database.set(this.playerPath(roomCode, 1), {
       name: playerName || "GUEST",
       uid,
       role: "guest",
       ready: false,
-      connected: true
+      connected: true,
+      lastSeen: this.database.serverTimestamp()
     });
     await this.database.update(this.metaPath(roomCode), { guestConnected: true });
-    this.database.onDisconnectRemove(this.playerPath(roomCode, 1));
+    await this.armPresenceDisconnect(roomCode, 1);
     return { roomCode, role: "guest", playerId: 1, mode: meta.mode ?? "coop" };
+  }
+
+  async resumeRoom(
+    roomCodeInput: string,
+    playerId: 0 | 1,
+    playerName: string
+  ): Promise<OnlineRoomHandle> {
+    const uid = await this.database.ensureAuthenticated();
+    const validation = validateRoomCode(roomCodeInput);
+    if (!validation.ok) throw new Error(validation.reason);
+    const roomCode = validation.code;
+    const [meta, player] = await Promise.all([
+      this.database.get(this.metaPath(roomCode)),
+      this.database.get(this.playerPath(roomCode, playerId))
+    ]) as [
+      { mode?: OnlineRoomMode } | null,
+      { uid?: string; connected?: boolean; lastSeen?: number; ready?: boolean } | null
+    ];
+    if (!meta) throw new Error("Room not found");
+    if (!player || player.uid !== uid) throw new Error("Player slot unavailable");
+    if (!player.connected && typeof player.lastSeen === "number" &&
+        this.now() - player.lastSeen > RECONNECT_GRACE_MS) {
+      throw new Error("Reconnect expired");
+    }
+    await this.database.update(this.playerPath(roomCode, playerId), {
+      name: playerName,
+      connected: true,
+      lastSeen: this.database.serverTimestamp()
+    });
+    await this.database.update(this.metaPath(roomCode), {
+      [playerId === 0 ? "hostConnected" : "guestConnected"]: true
+    });
+    await this.armPresenceDisconnect(roomCode, playerId);
+    return {
+      roomCode,
+      role: playerId === 0 ? "host" : "guest",
+      playerId,
+      mode: meta.mode ?? "coop"
+    };
+  }
+
+  private async armPresenceDisconnect(roomCode: string, playerId: 0 | 1): Promise<void> {
+    await Promise.all([
+      this.database.onDisconnectSet(`${this.playerPath(roomCode, playerId)}/connected`, false),
+      this.database.onDisconnectSet(
+      `${this.playerPath(roomCode, playerId)}/lastSeen`,
+      this.database.serverTimestamp()
+      ),
+      this.database.onDisconnectSet(
+      `${this.metaPath(roomCode)}/${playerId === 0 ? "hostConnected" : "guestConnected"}`,
+      false
+      )
+    ]);
+  }
+
+  private async disarmPresenceDisconnect(roomCode: string, playerId: 0 | 1): Promise<void> {
+    await Promise.all([
+      this.database.cancelOnDisconnect(`${this.playerPath(roomCode, playerId)}/connected`),
+      this.database.cancelOnDisconnect(`${this.playerPath(roomCode, playerId)}/lastSeen`),
+      this.database.cancelOnDisconnect(
+        `${this.metaPath(roomCode)}/${playerId === 0 ? "hostConnected" : "guestConnected"}`
+      )
+    ]);
+  }
+
+  async measureNetworkTiming(
+    roomCode: string,
+    playerId: 0 | 1
+  ): Promise<NetworkTimingSample> {
+    const samples: number[] = [];
+    const path = `${this.roomPath(roomCode)}/latency/${playerId}`;
+    for (let index = 0; index < 5; index += 1) {
+      const startedAt = this.now();
+      await this.database.set(path, index);
+      samples.push(Math.max(0, this.now() - startedAt));
+    }
+    await this.database.remove(path);
+    const rttMs = samples.reduce((total, sample) => total + sample, 0) / samples.length;
+    const jitterMs = samples.reduce(
+      (total, sample) => total + Math.abs(sample - rttMs),
+      0
+    ) / samples.length;
+    const timing = { rttMs, jitterMs };
+    await this.database.update(this.playerPath(roomCode, playerId), { timing });
+    return timing;
   }
 
   async setReady(roomCode: string, playerId: 0 | 1, ready: boolean): Promise<void> {
@@ -129,7 +236,7 @@ export class FirebaseOnlineSession {
 
   async beginCountdown(
     roomCode: string,
-    value: { seed: number; round: number; countdownEndsAt: number }
+    value: { seed: number; round: number; countdownEndsAt: number; bufferTicks?: number }
   ): Promise<void> {
     await Promise.all([
       this.database.remove(`${this.roomPath(roomCode)}/inputs`),
@@ -139,6 +246,7 @@ export class FirebaseOnlineSession {
       phase: "countdown",
       seed: value.seed,
       round: value.round,
+      bufferTicks: value.bufferTicks ?? 12,
       countdownEndsAt: value.countdownEndsAt,
       resultsEndsAt: null
     });
@@ -184,15 +292,95 @@ export class FirebaseOnlineSession {
     });
   }
 
+  async sendInputBatch(roomCode: string, batch: InputBatch): Promise<void> {
+    await this.database.set(
+      `${this.roomPath(roomCode)}/transport/${batch.round}/inputs/${batch.playerId}/${batch.sequence}`,
+      batch
+    );
+  }
+
+  async removeInputBatch(
+    roomCode: string,
+    round: number,
+    playerId: 0 | 1,
+    sequence: number
+  ): Promise<void> {
+    await this.database.remove(
+      `${this.roomPath(roomCode)}/transport/${round}/inputs/${playerId}/${sequence}`
+    );
+  }
+
+  subscribeInputBatches(
+    roomCode: string,
+    round: number,
+    opponentId: 0 | 1,
+    callback: (batch: InputBatch) => void
+  ): () => void {
+    return this.database.onChild(
+      `${this.roomPath(roomCode)}/transport/${round}/inputs/${opponentId}`,
+      (value) => callback(value as InputBatch)
+    );
+  }
+
+  async sendSyncStatus(
+    roomCode: string,
+    round: number,
+    playerId: 0 | 1,
+    status: OnlineSyncStatus
+  ): Promise<void> {
+    await this.database.set(
+      `${this.roomPath(roomCode)}/transport/${round}/status/${playerId}`,
+      status
+    );
+  }
+
+  subscribeSyncStatus(
+    roomCode: string,
+    round: number,
+    playerId: 0 | 1,
+    callback: (status: OnlineSyncStatus | null) => void
+  ): () => void {
+    return this.database.onValue(
+      `${this.roomPath(roomCode)}/transport/${round}/status/${playerId}`,
+      (value) => callback(value as OnlineSyncStatus | null)
+    );
+  }
+
+  async sendCheckpoint(
+    roomCode: string,
+    round: number,
+    checkpoint: OnlineCheckpoint
+  ): Promise<void> {
+    await this.database.set(
+      `${this.roomPath(roomCode)}/transport/${round}/checkpoint`,
+      checkpoint
+    );
+  }
+
+  subscribeCheckpoint(
+    roomCode: string,
+    round: number,
+    callback: (checkpoint: OnlineCheckpoint | null) => void
+  ): () => void {
+    return this.database.onValue(
+      `${this.roomPath(roomCode)}/transport/${round}/checkpoint`,
+      (value) => callback(value as OnlineCheckpoint | null)
+    );
+  }
+
   async sendRaceSnapshot(
     roomCode: string,
     playerId: 0 | 1,
     snapshot: RaceSnapshot
   ): Promise<void> {
-    await this.database.set(`${this.roomPath(roomCode)}/raceSnapshots/${playerId}`, snapshot);
+    await this.database.set(
+      `${this.roomPath(roomCode)}/raceSnapshots/${snapshot.round}/${playerId}`,
+      snapshot
+    );
   }
 
   async leaveRoom(roomCode: string, playerId: 0 | 1): Promise<void> {
+    await this.disarmPresenceDisconnect(roomCode, playerId);
     if (playerId === 0) {
       await this.database.remove(this.roomPath(roomCode));
       return;
@@ -215,8 +403,16 @@ export class FirebaseOnlineSession {
     return this.database.onValue(`${this.roomPath(roomCode)}/inputs`, callback);
   }
 
-  subscribeRaceSnapshots(roomCode: string, callback: (value: unknown) => void): () => void {
-    return this.database.onValue(`${this.roomPath(roomCode)}/raceSnapshots`, callback);
+  subscribeRaceSnapshots(
+    roomCode: string,
+    round: number,
+    opponentId: 0 | 1,
+    callback: (value: RaceSnapshot | null) => void
+  ): () => void {
+    return this.database.onValue(
+      `${this.roomPath(roomCode)}/raceSnapshots/${round}/${opponentId}`,
+      (value) => callback(value as RaceSnapshot | null)
+    );
   }
 
   private metaPath(roomCode: string): string {

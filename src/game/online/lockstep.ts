@@ -12,6 +12,7 @@ export interface LockstepStatus {
 
 export class OnlineLockstepController {
   private inputs = new Map<number, Partial<Record<0 | 1, NetworkPlayerInput>>>();
+  private minimumTick = 0;
   private currentStatus: LockstepStatus = {
     phase: "ready",
     waitingForTick: null,
@@ -21,6 +22,7 @@ export class OnlineLockstepController {
   constructor(private readonly options: { networkDelayTicks: number }) {}
 
   bufferInput(tick: number, playerId: 0 | 1, input: NetworkPlayerInput): void {
+    if (tick < this.minimumTick) return;
     const frame = this.inputs.get(tick) ?? {};
     frame[playerId] = { ...input };
     this.inputs.set(tick, frame);
@@ -64,5 +66,12 @@ export class OnlineLockstepController {
 
   status(): LockstepStatus {
     return { ...this.currentStatus, missingPlayers: [...this.currentStatus.missingPlayers] };
+  }
+
+  discardBefore(tick: number): void {
+    this.minimumTick = Math.max(this.minimumTick, tick);
+    for (const inputTick of this.inputs.keys()) {
+      if (inputTick < tick) this.inputs.delete(inputTick);
+    }
   }
 }

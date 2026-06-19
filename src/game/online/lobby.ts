@@ -4,6 +4,7 @@ export interface LobbyPlayerData {
   connected?: boolean;
   ready?: boolean;
   name?: string;
+  timing?: { rttMs: number; jitterMs: number };
 }
 
 export interface LobbyRoomData {

@@ -391,6 +391,20 @@ canvas {
 .online-state-dialog p { margin: 0; text-align: center; }
 .online-state-dialog h2 { font-size: 18px; }
 .online-state-dialog p { min-height: 18px; font-size: 12px; }
+.online-connection-indicator {
+  position: absolute;
+  z-index: 5;
+  right: 12px;
+  bottom: 12px;
+  padding: 4px 9px;
+  border: 2px outset #fff;
+  background: #d4d0c8;
+  color: #000;
+  box-shadow: 1px 1px 0 #222;
+  font-size: 11px;
+  pointer-events: none;
+}
+.online-connection-indicator[hidden] { display: none; }
 .online-pause-players {
   display: grid;
   grid-template-columns: 50px 1fr;

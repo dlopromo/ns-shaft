@@ -688,6 +688,29 @@ if (state.online?.dialog?.title !== "3") {
   throw new Error(`Online resume countdown is invalid: ${JSON.stringify(state.online?.dialog)}`);
 }
 await page.evaluate(() => window.__nsShaftQa.setOnlinePause(null));
+await page.evaluate(() => window.__nsShaftQa.setOnlineConnection(false, 6000));
+state = await capture("13ac-online-connection-syncing");
+if (state.online?.connection !== "syncing" ||
+    state.online?.connectionIndicator !== "通信中…" || state.online?.dialog !== null) {
+  throw new Error(`Transient disconnect blocked play: ${JSON.stringify(state.online)}`);
+}
+await page.evaluate(() => window.__nsShaftQa.setOnlineConnection(false, 14000));
+state = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
+if (state.online?.connection !== "syncing" || state.online?.dialog !== null) {
+  throw new Error(`Disconnect grace ended too early: ${JSON.stringify(state.online)}`);
+}
+await page.evaluate(() => window.__nsShaftQa.setOnlineConnection(false, 15100));
+state = await capture("13ad-online-connection-lost");
+if (state.online?.connection !== "disconnected" ||
+    state.online?.dialog?.title !== "通信が切断されました") {
+  throw new Error(`Confirmed disconnect dialog is missing: ${JSON.stringify(state.online)}`);
+}
+await page.evaluate(() => window.__nsShaftQa.setOnlineConnection(true, 0));
+state = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
+if (state.online?.connection !== "healthy" || state.online?.connectionIndicator !== null ||
+    state.online?.dialog !== null) {
+  throw new Error(`Connection did not recover immediately: ${JSON.stringify(state.online)}`);
+}
 const raceGeometry = await page.locator(".race-pane").evaluateAll((panes) =>
   panes.map((pane) => {
     const canvas = pane.querySelector("canvas");

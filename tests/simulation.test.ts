@@ -10,6 +10,27 @@ const idle: InputFrame = {
 };
 
 describe("GameSimulation gameplay rules", () => {
+  test("exports and restores a deterministic checkpoint including future platform generation", () => {
+    const first = new GameSimulation({ seed: 2026, difficulty: "hard", players: 2 });
+    first.setOptions({ conveyor: true, spring: true, rotating: true, fast: true });
+    const moving: InputFrame = {
+      players: [{ left: false, right: true }, { left: true, right: false }],
+      pausePressed: false
+    };
+    for (let tick = 0; tick < 240; tick += 1) first.step(moving, 1000 / 60);
+
+    const checkpoint = first.exportCheckpoint();
+    const restored = new GameSimulation({ seed: 1, difficulty: "easy", players: 1 });
+    restored.applyCheckpoint(checkpoint);
+    expect(restored.snapshot()).toEqual(first.snapshot());
+
+    for (let tick = 0; tick < 600; tick += 1) {
+      first.step(moving, 1000 / 60);
+      restored.step(moving, 1000 / 60);
+    }
+    expect(restored.snapshot()).toEqual(first.snapshot());
+  });
+
   test("starts above a centered normal floor with a queued floor below the viewport", () => {
     const game = new GameSimulation({ seed: 21, difficulty: "normal", players: 2 });
     const state = game.snapshot();

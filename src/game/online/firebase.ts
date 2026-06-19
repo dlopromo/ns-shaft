@@ -5,6 +5,8 @@ import {
   connectDatabaseEmulator,
   getDatabase,
   limitToLast,
+  onChildAdded,
+  onChildChanged,
   onDisconnect,
   onValue,
   orderByChild,
@@ -56,8 +58,26 @@ export class RealtimeDatabasePort implements OnlineDatabasePort {
     });
   }
 
+  onChild(path: string, callback: (value: unknown) => void): () => void {
+    const target = ref(this.database, path);
+    const added = onChildAdded(target, (snapshot) => callback(snapshot.val()));
+    const changed = onChildChanged(target, (snapshot) => callback(snapshot.val()));
+    return () => {
+      added();
+      changed();
+    };
+  }
+
   onDisconnectRemove(path: string): void {
     void onDisconnect(ref(this.database, path)).remove();
+  }
+
+  async onDisconnectSet(path: string, value: unknown): Promise<void> {
+    await onDisconnect(ref(this.database, path)).set(value);
+  }
+
+  async cancelOnDisconnect(path: string): Promise<void> {
+    await onDisconnect(ref(this.database, path)).cancel();
   }
 
   async getServerTimeOffset(): Promise<number> {

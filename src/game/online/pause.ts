@@ -1,5 +1,4 @@
 export const ONLINE_RESUME_COUNTDOWN_MS = 3000;
-export const ONLINE_DISCONNECT_MS = 5000;
 
 export interface ActiveOnlinePause {
   requestedBy: 0 | 1;
@@ -8,7 +7,6 @@ export interface ActiveOnlinePause {
 }
 
 export type OnlinePauseState = ActiveOnlinePause | null;
-export type OnlineConnectionState = "connected" | "syncing" | "disconnected";
 
 export function normalizeOnlinePause(
   pause: Omit<ActiveOnlinePause, "resumeAt"> & { resumeAt?: number | null }
@@ -28,13 +26,4 @@ export function markPauseReady(pause: OnlinePauseState, playerId: 0 | 1): Online
 export function schedulePauseResume(pause: OnlinePauseState, now: number): OnlinePauseState {
   if (!pause || pause.resumeAt !== null || !pause.ready[0] || !pause.ready[1]) return pause;
   return { ...pause, resumeAt: now + ONLINE_RESUME_COUNTDOWN_MS };
-}
-
-export function onlineConnectionState(
-  remoteAgeMs: number | null,
-  pause: OnlinePauseState
-): OnlineConnectionState {
-  if (pause) return "connected";
-  if (remoteAgeMs === null) return "syncing";
-  return remoteAgeMs < ONLINE_DISCONNECT_MS ? "connected" : "disconnected";
 }

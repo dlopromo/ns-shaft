@@ -13,6 +13,11 @@ import {
   type RankedLeaderboardEntry
 } from "./game/leaderboard";
 import { OnlineGameController } from "./game/online/controller";
+import {
+  connectionPresentation,
+  OnlineConnectionMonitor,
+  type OnlineConnectionState
+} from "./game/online/connection";
 import { copyRoomCode } from "./game/online/clipboard";
 import { createRealtimeDatabasePort, type RealtimeDatabasePort } from "./game/online/firebase";
 import { buildLobbyView, type LobbyRoomData } from "./game/online/lobby";
@@ -23,8 +28,12 @@ import {
 } from "./game/online/race";
 import { buildFirebaseConfig, validateRoomCode } from "./game/online/room";
 import {
+  ONLINE_RESUME_KEY,
+  parseResumeTicket,
+  type OnlineResumeTicket
+} from "./game/online/resume";
+import {
   normalizeOnlinePause,
-  onlineConnectionState,
   requestOnlinePause,
   schedulePauseResume,
   type OnlinePauseState
@@ -39,10 +48,15 @@ import {
 } from "./game/online/round";
 import {
   FirebaseOnlineSession,
-  type NetworkInput,
   type OnlineRoomHandle,
   type OnlineRoomMode
 } from "./game/online/session";
+import {
+  DEFAULT_BUFFER_TICKS,
+  selectBufferTicks,
+  type OnlineCheckpoint,
+  type OnlineSyncStatus
+} from "./game/online/sync";
 import type { Difficulty, GameStateSnapshot, InputFrame, SaveData } from "./game/types";
 
 interface OnlineRoomMeta {
@@ -52,6 +66,7 @@ interface OnlineRoomMeta {
   mode?: OnlineRoomMode;
   phase?: OnlineRoomPhase;
   round?: number;
+  bufferTicks?: number;
   countdownEndsAt?: number | null;
   resultsEndsAt?: number | null;
   hostConnected?: boolean;
@@ -75,6 +90,7 @@ declare global {
       setRaceRemotePlayer: (patch: Record<string, unknown>) => void;
       setOnlineRoundPhase: (phase: OnlineRoomPhase, endsInMs?: number) => void | Promise<void>;
       setOnlinePause: (pause: OnlinePauseState) => void;
+      setOnlineConnection: (connected: boolean, idleMs: number) => void;
       showOnlineLobby: (
         players: LobbyRoomData["players"],
         localPlayerId?: 0 | 1
@@ -209,6 +225,9 @@ root.innerHTML = `
           </div>
         </div>
       </section>
+      <div id="online-connection-indicator" class="online-connection-indicator" hidden>
+        ${t("online.connection.syncing")}
+      </div>
     </section>
     <section id="race-stage" class="race-stage" aria-label="オンライン対戦" hidden>
       <div class="race-strip">
@@ -255,6 +274,9 @@ const onlinePausePlayers = document.querySelector<HTMLElement>("#online-pause-pl
 const onlineStateActions = document.querySelector<HTMLElement>("#online-state-actions")!;
 const onlineStateReady = document.querySelector<HTMLButtonElement>("#online-state-ready")!;
 const onlineStateLeave = document.querySelector<HTMLButtonElement>("#online-state-leave")!;
+const onlineConnectionIndicator = document.querySelector<HTMLElement>(
+  "#online-connection-indicator"
+)!;
 const raceStage = document.querySelector<HTMLElement>("#race-stage")!;
 const racePause = document.querySelector<HTMLButtonElement>("#race-pause")!;
 const raceAbort = document.querySelector<HTMLButtonElement>("#race-abort")!;
@@ -279,6 +301,10 @@ let onlineRoom: OnlineRoomHandle | null = null;
 let unsubscribeOnlineRoom: (() => void) | null = null;
 let unsubscribeOnlineInputs: (() => void) | null = null;
 let unsubscribeRaceSnapshots: (() => void) | null = null;
+let unsubscribeOnlineStatus: (() => void) | null = null;
+let unsubscribeOnlineCheckpoint: (() => void) | null = null;
+let onlinePeerStatus: OnlineSyncStatus | null = null;
+let latestOnlineCheckpoint: OnlineCheckpoint | null = null;
 let onlineRoomData: OnlineRoomData | null = null;
 let onlinePhase: OnlineRoomPhase | null = null;
 let onlineServerOffsetMs = 0;
@@ -293,12 +319,26 @@ let accumulator = 0;
 let lastTime = performance.now();
 let scoreHandled = false;
 const STEP_MS = 1000 / 60;
+const onlineConnectionMonitor = new OnlineConnectionMonitor(performance.now());
 const qaMode = new URLSearchParams(location.search).get("qa") === "1";
 pauseControl.hidden = true;
 abortControl.hidden = true;
 
 function persist(): void {
   localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+}
+
+function saveOnlineResumeTicket(room: OnlineRoomHandle): void {
+  const ticket: OnlineResumeTicket = {
+    roomCode: room.roomCode,
+    playerId: room.playerId,
+    playerName: onlinePlayerName()
+  };
+  localStorage.setItem(ONLINE_RESUME_KEY, JSON.stringify(ticket));
+}
+
+function clearOnlineResumeTicket(): void {
+  localStorage.removeItem(ONLINE_RESUME_KEY);
 }
 
 function syncRendererSettings(): void {
@@ -469,19 +509,17 @@ function update(input: InputFrame, elapsedMs = STEP_MS): void {
     const remote = onlineRace.remoteRenderSnapshot();
     audio.consume(onlineRace.drainEvents());
     raceLocalRenderer.render(local);
-    raceRemoteRenderer.render(remote ?? local);
+    if (remote) raceRemoteRenderer.render(remote);
     drawRaceStatus();
     drawOnlineRoundOverlay();
     return;
   }
   if (onlineGame) {
     if (onlinePhase === "playing" && !onlinePaused) onlineGame.step(input);
+    maybeApplyHostCheckpoint(latestOnlineCheckpoint);
     const state = onlineGame.snapshot();
     audio.consume(onlineGame.drainEvents());
     renderer.render(state);
-    if (onlinePhase === "playing" && onlineGame.status().phase === "waiting") {
-      drawOnlineWaiting();
-    }
     drawOnlineRoundOverlay();
     return;
   }
@@ -648,6 +686,8 @@ function showOnlineRoomLobby(room: OnlineRoomHandle, roomData: OnlineRoomData): 
   abortControl.hidden = true;
   onlineState.hidden = true;
   gameFrame.append(onlineState);
+  gameFrame.append(onlineConnectionIndicator);
+  onlineConnectionIndicator.hidden = true;
   enterOnlineRoom(room.role);
   renderOnlineLobby(roomData, room.playerId);
   updateFullscreenScale();
@@ -727,10 +767,13 @@ async function driveOnlineRoundLifecycle(): Promise<void> {
   const session = getOnlineSession();
   try {
     if (action === "begin-countdown") {
+      const timingSamples = [data.players?.[0]?.timing, data.players?.[1]?.timing]
+        .filter((value): value is { rttMs: number; jitterMs: number } => Boolean(value));
       await session.beginCountdown(room.roomCode, {
         seed: Math.floor(Math.random() * 0x7fffffff),
         round: (data.meta.round ?? 0) + 1,
-        countdownEndsAt: now + ONLINE_COUNTDOWN_MS
+        countdownEndsAt: now + ONLINE_COUNTDOWN_MS,
+        bufferTicks: selectBufferTicks(timingSamples)
       });
     } else if (action === "begin-playing") {
       await session.beginPlaying(room.roomCode);
@@ -755,9 +798,16 @@ async function leaveOnlineRoom(): Promise<void> {
   unsubscribeOnlineRoom?.();
   unsubscribeOnlineInputs?.();
   unsubscribeRaceSnapshots?.();
+  unsubscribeOnlineStatus?.();
+  unsubscribeOnlineCheckpoint?.();
   unsubscribeOnlineRoom = null;
   unsubscribeOnlineInputs = null;
   unsubscribeRaceSnapshots = null;
+  unsubscribeOnlineStatus = null;
+  unsubscribeOnlineCheckpoint = null;
+  onlinePeerStatus = null;
+  latestOnlineCheckpoint = null;
+  onlineConnectionMonitor.reset(performance.now());
   onlineRoom = null;
   onlineRoomData = null;
   onlinePhase = null;
@@ -765,9 +815,35 @@ async function leaveOnlineRoom(): Promise<void> {
   onlineTransitionPending = false;
   wasOnlinePaused = false;
   onlineState.hidden = true;
+  onlineConnectionIndicator.hidden = true;
   exitOnlineRoom();
   if (room && session) {
+    clearOnlineResumeTicket();
     await session.leaveRoom(room.roomCode, room.playerId).catch(() => undefined);
+  }
+}
+
+async function resumeSavedOnlineRoom(): Promise<void> {
+  if (onlineRoom) return;
+  const ticket = parseResumeTicket(localStorage.getItem(ONLINE_RESUME_KEY));
+  if (!ticket) return;
+  try {
+    const session = getOnlineSession();
+    setOnlineStatus(t("online.connection.syncing"));
+    onlineServerOffsetMs = await session.getServerTimeOffset().catch(() => 0);
+    const room = await session.resumeRoom(
+      ticket.roomCode,
+      ticket.playerId,
+      ticket.playerName
+    );
+    onlineName.value = ticket.playerName;
+    onlineCode.value = room.roomCode;
+    onlineRoom = room;
+    enterOnlineRoom(room.role);
+    subscribeOnlineRoom(room);
+    void session.measureNetworkTiming(room.roomCode, room.playerId).catch(() => undefined);
+  } catch {
+    clearOnlineResumeTicket();
   }
 }
 
@@ -775,6 +851,12 @@ function subscribeOnlineRoom(room: OnlineRoomHandle): void {
   unsubscribeOnlineRoom?.();
   unsubscribeOnlineInputs?.();
   unsubscribeRaceSnapshots?.();
+  unsubscribeOnlineStatus?.();
+  unsubscribeOnlineCheckpoint?.();
+  unsubscribeOnlineInputs = null;
+  unsubscribeRaceSnapshots = null;
+  unsubscribeOnlineStatus = null;
+  unsubscribeOnlineCheckpoint = null;
   const session = getOnlineSession();
   unsubscribeOnlineRoom = session.subscribeRoom(room.roomCode, (snapshot) => {
     if (!snapshot) {
@@ -788,9 +870,10 @@ function subscribeOnlineRoom(room: OnlineRoomHandle): void {
     }
     const hostReady = Boolean(roomData.players?.[0]?.ready);
     const guestReady = Boolean(roomData.players?.[1]?.ready);
-    const guestPresent = Boolean(roomData.players?.[1]);
+    const guestPresent = Boolean(roomData.players?.[1]?.connected);
     const previousPhase = onlinePhase;
     const phase = roomData.meta?.phase ?? "lobby";
+    room.mode = roomData.meta?.mode ?? room.mode;
     onlineRoomData = roomData;
     onlinePhase = phase;
     renderOnlineLobby(roomData, room.playerId);
@@ -813,23 +896,22 @@ function subscribeOnlineRoom(room: OnlineRoomHandle): void {
       showTitle();
       return;
     }
-    if (room.role === "host" && !guestPresent && roomData.meta?.guestConnected &&
-        !onlineTransitionPending) {
-      onlineTransitionPending = true;
-      void session.leaveRoom(room.roomCode, 1).finally(() => {
-        onlineTransitionPending = false;
-      });
-      return;
-    }
     if (phase === "countdown") {
       prepareOnlineMode(room, roomData.meta ?? {});
       setOnlineStatus(t("online.phase.countdown"), "success");
     }
     if (phase === "playing") {
       prepareOnlineMode(room, roomData.meta ?? {});
-      if (previousPhase !== "playing") void audio.startMusic();
+      onlineRace?.beginPlaying();
+      if (previousPhase !== "playing") {
+        onlineConnectionMonitor.reset(performance.now());
+        void audio.startMusic();
+      }
       setOnlineStatus(t("online.phase.playing"), "success");
     }
+    const opponentId = room.playerId === 0 ? 1 : 0;
+    const peerPresence = roomData.players?.[opponentId]?.connected;
+    onlineConnectionMonitor.setPeerPresence(peerPresence === true, performance.now());
     if (phase === "results") {
       audio.stopMusic();
       setOnlineStatus(t("online.phase.results"), "success");
@@ -843,34 +925,17 @@ function subscribeOnlineRoom(room: OnlineRoomHandle): void {
       accumulator = 0;
       wasOnlinePaused = onlinePausedNow;
       if (onlinePausedNow) void audio.suspend();
-      else void audio.resume();
+      else {
+        onlineConnectionMonitor.reset(performance.now());
+        onlineConnectionMonitor.setPeerPresence(peerPresence === true, performance.now());
+        void audio.resume();
+      }
     }
     pauseControl.hidden = phase !== "playing" || Boolean(onlinePausedNow) || Boolean(onlineRace);
     racePause.hidden = phase !== "playing" || Boolean(onlinePausedNow) || !onlineRace;
     renderOnlineStateDialog();
     void driveOnlineRoundLifecycle();
   });
-  if (room.mode === "coop") {
-    unsubscribeOnlineInputs = session.subscribeInputs(room.roomCode, (snapshot) => {
-      if (!onlineGame || !snapshot) return;
-      const ticks = snapshot as Record<string, Record<string, NetworkInput>>;
-      for (const [tick, players] of Object.entries(ticks)) {
-        for (const [playerId, input] of Object.entries(players)) {
-          if (playerId === "0" || playerId === "1") {
-            onlineGame.queueRemoteInput(Number(tick), Number(playerId) as 0 | 1, input);
-          }
-        }
-      }
-    });
-  } else {
-    unsubscribeRaceSnapshots = session.subscribeRaceSnapshots(room.roomCode, (snapshot) => {
-      if (!onlineRace || !snapshot) return;
-      const snapshots = snapshot as Partial<Record<0 | 1, RaceSnapshot>>;
-      for (const raceSnapshot of Object.values(snapshots)) {
-        if (raceSnapshot) onlineRace.receiveSnapshot(raceSnapshot);
-      }
-    });
-  }
 }
 
 function prepareOnlineMode(
@@ -878,10 +943,13 @@ function prepareOnlineMode(
   meta: OnlineRoomMeta
 ): void {
   const round = meta.round ?? 0;
-  if (onlinePreparedRound === round && (onlineGame || onlineRace)) return;
+  const mode = meta.mode ?? room.mode;
+  if (onlinePreparedRound === round && room.mode === mode &&
+      ((mode === "coop" && onlineGame) || (mode === "race" && onlineRace))) return;
+  room.mode = mode;
   onlinePreparedRound = round;
   submittedOnlineRound = -1;
-  if ((meta.mode ?? room.mode) === "race") {
+  if (mode === "race") {
     prepareOnlineRace(room, meta);
     return;
   }
@@ -897,22 +965,77 @@ function onlineOptions(meta: { options?: Partial<SaveData["settings"]> }) {
   };
 }
 
+function clearOnlineTransportSubscriptions(): void {
+  unsubscribeOnlineInputs?.();
+  unsubscribeRaceSnapshots?.();
+  unsubscribeOnlineStatus?.();
+  unsubscribeOnlineCheckpoint?.();
+  unsubscribeOnlineInputs = null;
+  unsubscribeRaceSnapshots = null;
+  unsubscribeOnlineStatus = null;
+  unsubscribeOnlineCheckpoint = null;
+  onlinePeerStatus = null;
+  latestOnlineCheckpoint = null;
+  onlineConnectionMonitor.reset(performance.now());
+}
+
 function prepareOnlineCoop(
   room: OnlineRoomHandle,
   meta: OnlineRoomMeta
 ): void {
   const seed = meta.seed ?? Date.now();
   const onlineDifficulty = meta.difficulty ?? save.settings.difficulty;
+  const round = meta.round ?? 0;
+  const session = getOnlineSession();
+  clearOnlineTransportSubscriptions();
   onlineGame = new OnlineGameController({
     seed,
     difficulty: onlineDifficulty,
     options: onlineOptions(meta),
-    networkDelayTicks: 6,
+    round,
+    bufferTicks: meta.bufferTicks ?? DEFAULT_BUFFER_TICKS,
     playerId: room.playerId,
-    sendInput: async (tick, playerId, input) => {
-      await getOnlineSession().sendInput(room.roomCode, tick, playerId, input);
-    }
+    sendInputBatch: (batch) => session.sendInputBatch(room.roomCode, batch),
+    removeInputBatch: (sequence) =>
+      session.removeInputBatch(room.roomCode, round, room.playerId, sequence),
+    publishSyncStatus: (status) =>
+      session.sendSyncStatus(room.roomCode, round, room.playerId, status),
+    publishCheckpoint: (checkpoint) =>
+      session.sendCheckpoint(room.roomCode, round, checkpoint)
   });
+  const opponentId = room.playerId === 0 ? 1 : 0;
+  unsubscribeOnlineInputs = session.subscribeInputBatches(
+    room.roomCode,
+    round,
+    opponentId,
+    (batch) => {
+      onlineConnectionMonitor.markPeerActivity(performance.now());
+      onlineGame?.queueRemoteBatch(batch);
+    }
+  );
+  unsubscribeOnlineStatus = session.subscribeSyncStatus(
+    room.roomCode,
+    round,
+    opponentId,
+    (status) => {
+      onlinePeerStatus = status;
+      if (status) {
+        onlineConnectionMonitor.markPeerActivity(performance.now());
+        onlineGame?.receivePeerStatus(status);
+      }
+    }
+  );
+  unsubscribeOnlineCheckpoint = session.subscribeCheckpoint(
+    room.roomCode,
+    round,
+    (checkpoint) => {
+      latestOnlineCheckpoint = checkpoint;
+      if (checkpoint && room.playerId === 1) {
+        onlineConnectionMonitor.markPeerActivity(performance.now());
+      }
+      maybeApplyHostCheckpoint(checkpoint);
+    }
+  );
   playerCount = 2;
   game = null;
   onlineRace = null;
@@ -927,10 +1050,25 @@ function prepareOnlineCoop(
   pauseControl.hidden = false;
   abortControl.hidden = false;
   gameFrame.append(onlineState);
+  gameFrame.append(onlineConnectionIndicator);
   onlineState.hidden = true;
+  onlineConnectionIndicator.hidden = true;
   setOnlineStatus(t("online.phase.playing"));
   renderer.render(onlineGame.snapshot());
   void refreshWorldRecord("coop", onlineDifficulty);
+}
+
+function maybeApplyHostCheckpoint(checkpoint: OnlineCheckpoint | null): void {
+  if (!checkpoint || !onlineGame || !onlineRoom) return;
+  const local = onlineGame.syncStatus();
+  const hostReconnect = onlineRoom.playerId === 0 &&
+    local.simulationTick === 0 && checkpoint.tick > 0;
+  const sameTickMismatch = checkpoint.tick === local.simulationTick &&
+    checkpoint.stateHash !== local.stateHash;
+  const farBehind = checkpoint.tick - local.simulationTick > 30;
+  if (hostReconnect || (onlineRoom.playerId === 1 && (sameTickMismatch || farBehind))) {
+    onlineGame.applyHostCheckpoint(checkpoint);
+  }
 }
 
 function prepareOnlineRace(
@@ -938,17 +1076,33 @@ function prepareOnlineRace(
   meta: OnlineRoomMeta,
   sendSnapshot?: (snapshot: RaceSnapshot) => Promise<void>
 ): void {
+  const round = meta.round ?? 0;
+  const session = getOnlineSession();
+  clearOnlineTransportSubscriptions();
   onlineRace = new OnlineRaceController({
     seed: meta.seed ?? Date.now(),
     difficulty: meta.difficulty ?? save.settings.difficulty,
     options: onlineOptions(meta),
     playerId: room.playerId,
     playerName: onlinePlayerName(),
+    round,
     snapshotIntervalTicks: 6,
     sendSnapshot: sendSnapshot ?? (async (snapshot) => {
-      await getOnlineSession().sendRaceSnapshot(room.roomCode, room.playerId, snapshot);
+      await session.sendRaceSnapshot(room.roomCode, room.playerId, snapshot);
     })
   });
+  const opponentId = room.playerId === 0 ? 1 : 0;
+  unsubscribeRaceSnapshots = session.subscribeRaceSnapshots(
+    room.roomCode,
+    round,
+    opponentId,
+    (snapshot) => {
+      if (snapshot) {
+        onlineConnectionMonitor.markPeerActivity(performance.now());
+        onlineRace?.receiveSnapshot(snapshot);
+      }
+    }
+  );
   onlineGame = null;
   game = null;
   playerCount = 1;
@@ -961,13 +1115,14 @@ function prepareOnlineRace(
   raceStage.hidden = false;
   cabinet.classList.add("race-active");
   raceLocalLabel.textContent = `1P · ${onlinePlayerName()}`;
-  const opponentId = room.playerId === 0 ? 1 : 0;
   raceRemoteLabel.textContent = `2P · ${onlineRoomData?.players?.[opponentId]?.name ?? "PLAYER2"}`;
   const initial = onlineRace.localSnapshot();
   raceLocalRenderer.render(initial);
-  raceRemoteRenderer.render(initial);
+  raceRemoteRenderer.render({ ...initial, players: [], platforms: [] });
   raceLocalPane.append(onlineState);
+  raceLocalPane.append(onlineConnectionIndicator);
   onlineState.hidden = true;
+  onlineConnectionIndicator.hidden = true;
   updateFullscreenScale();
   void refreshWorldRecord("race", meta.difficulty ?? save.settings.difficulty);
 }
@@ -1002,11 +1157,26 @@ function localizedRaceResult(): string {
     result === "YOU LOSE" ? t("online.result.lose") : t("online.result.draw");
 }
 
+function currentOnlineConnectionState(): OnlineConnectionState {
+  return onlineConnectionMonitor.state(
+    performance.now(),
+    onlinePhase !== "playing" || Boolean(onlineRoomData?.meta?.pause)
+  );
+}
+
+function renderOnlineConnectionIndicator(): OnlineConnectionState {
+  const state = currentOnlineConnectionState();
+  onlineConnectionIndicator.hidden = !connectionPresentation(state).indicator;
+  return state;
+}
+
 function renderOnlineStateDialog(): void {
   if (!onlineRoom) {
     onlineState.hidden = true;
+    onlineConnectionIndicator.hidden = true;
     return;
   }
+  const connectionState = renderOnlineConnectionIndicator();
   const now = onlineServerNow();
   const pause = onlineRoomData?.meta?.pause ?? null;
   if (pause) {
@@ -1030,9 +1200,7 @@ function renderOnlineStateDialog(): void {
     showOnlineState(countdown, countdown === "GO!" ? "" : t("online.phase.ready"));
     return;
   }
-  const raceStatus = onlineRace?.status();
-  const connection = onlineConnectionState(raceStatus?.remoteAgeMs ?? null, pause);
-  if (onlineRace && connection === "disconnected" && onlinePhase === "playing") {
+  if (connectionPresentation(connectionState).dialog) {
     showOnlineState(t("online.connection.lost"), t("online.connection.waiting"), {
       canLeave: true
     });
@@ -1078,16 +1246,14 @@ function onlineDisplayText(): string | null {
 
 function drawRaceStatus(): void {
   if (!onlineRace) return;
-  const status = onlineRace.status();
-  const connection = onlineConnectionState(status.remoteAgeMs, onlineRoomData?.meta?.pause ?? null);
+  const connection = currentOnlineConnectionState();
   const opponentId = onlineRoom?.playerId === 0 ? 1 : 0;
-  const name = onlineRoomData?.players?.[opponentId]?.name ?? "PLAYER2";
-  raceRemoteLabel.textContent = connection === "connected"
+  const identity = onlineRace.remoteIdentity();
+  const name = identity?.playerId === opponentId
+    ? identity.name
+    : onlineRoomData?.players?.[opponentId]?.name ?? "PLAYER2";
+  raceRemoteLabel.textContent = connection === "healthy" && identity
     ? `2P · ${name}` : `2P · ${t("online.connection.syncing")}`;
-}
-
-function drawOnlineWaiting(): void {
-  renderOnlineStateDialog();
 }
 
 document.querySelectorAll<HTMLButtonElement>("[data-start]").forEach((button) => {
@@ -1103,6 +1269,7 @@ document.querySelectorAll<HTMLButtonElement>("[data-open]").forEach((button) => 
       onlineName.value = save.lastInputName;
       exitOnlineRoom();
       setOnlineStatus(t("online.description"));
+      void resumeSavedOnlineRoom();
     }
     if (panel === "records") {
       recordsPanel.hidden = false;
@@ -1181,6 +1348,8 @@ onlineCreate.addEventListener("click", async () => {
       roomCode: codeInput || undefined
     });
     onlineRoom = room;
+    saveOnlineResumeTicket(room);
+    void session.measureNetworkTiming(room.roomCode, room.playerId).catch(() => undefined);
     save.lastInputName = onlinePlayerName();
     persist();
     onlineCode.value = room.roomCode;
@@ -1209,6 +1378,8 @@ onlineJoin.addEventListener("click", async () => {
     onlineServerOffsetMs = await session.getServerTimeOffset().catch(() => 0);
     const room = await session.joinRoom(validation.code, onlinePlayerName());
     onlineRoom = room;
+    saveOnlineResumeTicket(room);
+    void session.measureNetworkTiming(room.roomCode, room.playerId).catch(() => undefined);
     save.lastInputName = onlinePlayerName();
     persist();
     enterOnlineRoom("guest");
@@ -1307,6 +1478,7 @@ function updateFullscreenScale(): void {
 window.addEventListener("resize", updateFullscreenScale);
 document.addEventListener("fullscreenchange", updateFullscreenScale);
 updateFullscreenScale();
+void resumeSavedOnlineRoom();
 
 window.render_game_to_text = () => JSON.stringify({
   coordinateSystem: "origin top-left; +x right; +y down; frame 634x436; playfield 420x356 at (22,62)",
@@ -1324,6 +1496,13 @@ window.render_game_to_text = () => JSON.stringify({
     pause: onlineRoomData?.meta?.pause ?? null,
     display: onlineDisplayText(),
     status: onlineGame?.status() ?? onlineRace?.status(),
+    sync: onlineGame?.syncStatus() ?? null,
+    peerStatus: onlinePeerStatus,
+    bufferTicks: onlineRoomData?.meta?.bufferTicks ?? null,
+    connection: currentOnlineConnectionState(),
+    connectionIndicator: onlineConnectionIndicator.hidden
+      ? null
+      : onlineConnectionIndicator.textContent?.trim() ?? null,
     dialog: onlineState.hidden ? null : {
       title: onlineStateTitle.textContent,
       detail: onlineStateDetail.textContent
@@ -1377,8 +1556,16 @@ if (qaMode) {
       if (!onlineRace) return;
       const state = onlineRace.localSnapshot();
       state.players[0] = { ...state.players[0], ...patch };
-      onlineRace.receiveSnapshot(serializeRaceSnapshot(1, "OPPONENT", Date.now(), state));
-      raceRemoteRenderer.render(onlineRace.remoteSnapshot()!);
+      onlineRace.receiveSnapshot(serializeRaceSnapshot(
+        1,
+        "OPPONENT",
+        Date.now(),
+        state,
+        onlineRoomData?.meta?.round ?? 0,
+        state.ticks + 1
+      ));
+      const remote = onlineRace.remoteSnapshot();
+      if (remote) raceRemoteRenderer.render(remote);
       drawRaceStatus();
     },
     setOnlineRoundPhase: async (phase, endsInMs = 0) => {
@@ -1420,6 +1607,13 @@ if (qaMode) {
       if (!onlineRoomData?.meta) return;
       onlineRoomData.meta.pause = pause;
       renderOnlineStateDialog();
+    },
+    setOnlineConnection: (connected, idleMs) => {
+      const now = performance.now();
+      onlineConnectionMonitor.reset(now - idleMs);
+      onlineConnectionMonitor.setPeerPresence(connected, now - idleMs);
+      renderOnlineStateDialog();
+      drawRaceStatus();
     },
     showOnlineLobby: (players, localPlayerId = 0) => {
       onlinePanel.hidden = false;

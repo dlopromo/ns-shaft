@@ -8,6 +8,27 @@ const idle: InputFrame = {
 };
 
 describe("OnlineRaceController", () => {
+  test("does not age the remote connection during the five second countdown", () => {
+    const sent: unknown[] = [];
+    let now = 1000;
+    const controller = new OnlineRaceController({
+      seed: 123,
+      difficulty: "normal",
+      playerId: 0,
+      playerName: "HOST",
+      round: 3,
+      snapshotIntervalTicks: 6,
+      now: () => now,
+      sendSnapshot: async (snapshot) => { sent.push(snapshot); }
+    });
+
+    now = 7000;
+    controller.beginPlaying();
+    expect(controller.status()).toMatchObject({ remoteAgeMs: 0 });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ playerId: 0, round: 3, sequence: 0 });
+  });
+
   test("advances the local one-player game without a remote snapshot", () => {
     const sent: unknown[] = [];
     let now = 1000;
@@ -16,6 +37,7 @@ describe("OnlineRaceController", () => {
       difficulty: "normal",
       playerId: 0,
       playerName: "HOST",
+      round: 1,
       snapshotIntervalTicks: 6,
       now: () => now,
       sendSnapshot: async (snapshot) => {
@@ -28,9 +50,9 @@ describe("OnlineRaceController", () => {
     expect(controller.localSnapshot().ticks).toBeGreaterThan(0);
     expect(controller.localSnapshot().players).toHaveLength(1);
     expect(controller.remoteSnapshot()).toBeNull();
-    expect(controller.status()).toMatchObject({ remoteAgeMs: 0, remoteWaiting: false });
+    expect(controller.status()).toMatchObject({ remoteAgeMs: 0 });
     now = 6000;
-    expect(controller.status()).toMatchObject({ remoteAgeMs: 5000, remoteWaiting: true });
+    expect(controller.status()).toMatchObject({ remoteAgeMs: 5000 });
   });
 
   test("publishes every configured interval and accepts opponent snapshots", () => {
@@ -41,6 +63,7 @@ describe("OnlineRaceController", () => {
       difficulty: "hard",
       playerId: 0,
       playerName: "HOST",
+      round: 1,
       snapshotIntervalTicks: 2,
       now: () => now,
       sendSnapshot: async (snapshot) => {
@@ -52,29 +75,27 @@ describe("OnlineRaceController", () => {
       difficulty: "hard",
       playerId: 1,
       playerName: "GUEST",
+      round: 1,
       snapshotIntervalTicks: 2,
       now: () => now,
       sendSnapshot: async () => undefined
     });
 
     opponent.step(idle);
-    const remote = serializeRaceSnapshot(1, "GUEST", now, opponent.localSnapshot());
+    const remote = serializeRaceSnapshot(1, "GUEST", now, opponent.localSnapshot(), 1, 0);
     controller.receiveSnapshot(remote);
     controller.step(idle);
     controller.step(idle);
 
-    expect(sent).toHaveLength(1);
+    expect(sent).toHaveLength(2);
     expect(controller.remoteSnapshot()).toEqual(remote.state);
     expect(controller.status()).toMatchObject({
-      remoteWaiting: false,
       localFinished: false,
       remoteFinished: false
     });
 
-    now = 5999;
-    expect(controller.status().remoteWaiting).toBe(false);
     now = 6000;
-    expect(controller.status().remoteWaiting).toBe(true);
+    expect(controller.status().remoteAgeMs).toBe(5000);
   });
 
   test("serializes a detached JSON-safe race snapshot", () => {
@@ -83,6 +104,7 @@ describe("OnlineRaceController", () => {
       difficulty: "easy",
       playerId: 0,
       playerName: "HOST",
+      round: 1,
       snapshotIntervalTicks: 6,
       now: () => 1000,
       sendSnapshot: async () => undefined
@@ -102,6 +124,7 @@ describe("OnlineRaceController", () => {
       difficulty: "normal",
       playerId: 0,
       playerName: "HOST",
+      round: 1,
       snapshotIntervalTicks: 1,
       now: () => 1000,
       sendSnapshot: async (snapshot) => {
@@ -113,8 +136,8 @@ describe("OnlineRaceController", () => {
     controller.step({ ...idle, pausePressed: true });
     controller.step(idle);
 
-    expect(sent).toHaveLength(2);
-    expect((sent[1] as { state: { mode: string } }).state.mode).toBe("paused");
+    expect(sent).toHaveLength(3);
+    expect((sent[2] as { state: { mode: string } }).state.mode).toBe("paused");
   });
 
   test("interpolates remote render state without changing authoritative results", () => {
@@ -124,6 +147,7 @@ describe("OnlineRaceController", () => {
       difficulty: "normal",
       playerId: 0,
       playerName: "HOST",
+      round: 1,
       snapshotIntervalTicks: 6,
       now: () => now,
       sendSnapshot: async () => undefined
@@ -137,7 +161,7 @@ describe("OnlineRaceController", () => {
         ...player, x: 100, y: 200, facing: "left" as const
       })),
       platforms: base.platforms.map((platform) => ({ ...platform, y: 100 }))
-    });
+    }, 1, 1);
     controller.receiveSnapshot(first);
 
     now = 1100;
@@ -149,7 +173,7 @@ describe("OnlineRaceController", () => {
         ...player, x: 200, y: 300, facing: "right" as const
       })),
       platforms: base.platforms.map((platform) => ({ ...platform, y: 120 }))
-    });
+    }, 1, 2);
     controller.receiveSnapshot(second);
 
     now = 1150;
@@ -167,12 +191,38 @@ describe("OnlineRaceController", () => {
     expect(controller.remoteRenderSnapshot()?.platforms[0].y).toBe(110);
   });
 
+  test("adapts remote render delay to packet jitter within a bounded window", () => {
+    let now = 1000;
+    const controller = new OnlineRaceController({
+      seed: 95,
+      difficulty: "normal",
+      playerId: 0,
+      playerName: "HOST",
+      round: 1,
+      snapshotIntervalTicks: 6,
+      now: () => now,
+      sendSnapshot: async () => undefined
+    });
+    const state = controller.localSnapshot();
+
+    controller.receiveSnapshot(serializeRaceSnapshot(1, "GUEST", now, state, 1, 1));
+    now += 100;
+    controller.receiveSnapshot(serializeRaceSnapshot(1, "GUEST", now, state, 1, 2));
+    expect(controller.status().renderDelayMs).toBe(100);
+
+    now += 240;
+    controller.receiveSnapshot(serializeRaceSnapshot(1, "GUEST", now, state, 1, 3));
+    expect(controller.status().renderDelayMs).toBeGreaterThan(100);
+    expect(controller.status().renderDelayMs).toBeLessThanOrEqual(250);
+  });
+
   test("ignores an older remote snapshot", () => {
     const controller = new OnlineRaceController({
       seed: 93,
       difficulty: "normal",
       playerId: 0,
       playerName: "HOST",
+      round: 4,
       snapshotIntervalTicks: 6,
       now: () => 1000,
       sendSnapshot: async () => undefined
@@ -182,13 +232,39 @@ describe("OnlineRaceController", () => {
       ...state,
       ticks: 20,
       players: state.players.map((player) => ({ ...player, x: 200 }))
-    }));
+    }, 4, 2));
     controller.receiveSnapshot(serializeRaceSnapshot(1, "GUEST", 1000, {
       ...state,
       ticks: 10,
       players: state.players.map((player) => ({ ...player, x: 100 }))
-    }));
+    }, 4, 1));
 
     expect(controller.remoteSnapshot()?.players[0].x).toBe(200);
+  });
+
+  test("accepts only the current round opponent with a newer sequence", () => {
+    const controller = new OnlineRaceController({
+      seed: 94,
+      difficulty: "normal",
+      playerId: 1,
+      playerName: "GUEST",
+      round: 7,
+      snapshotIntervalTicks: 6,
+      now: () => 1000,
+      sendSnapshot: async () => undefined
+    });
+    const state = controller.localSnapshot();
+
+    controller.receiveSnapshot(serializeRaceSnapshot(1, "SELF", 1000, state, 7, 1));
+    controller.receiveSnapshot(serializeRaceSnapshot(0, "OLDROUND", 1000, state, 6, 2));
+    expect(controller.remoteSnapshot()).toBeNull();
+
+    controller.receiveSnapshot(serializeRaceSnapshot(0, "HOST", 1000, state, 7, 2));
+    controller.receiveSnapshot(serializeRaceSnapshot(0, "STALE", 2000, {
+      ...state,
+      players: state.players.map((player) => ({ ...player, x: 10 }))
+    }, 7, 1));
+    expect(controller.remoteIdentity()).toEqual({ playerId: 0, name: "HOST" });
+    expect(controller.remoteSnapshot()?.players[0].x).not.toBe(10);
   });
 });

@@ -80,6 +80,19 @@ export interface GameStateSnapshot {
   platforms: PlatformState[];
 }
 
+export interface SimulationCheckpoint {
+  state: GameStateSnapshot;
+  randomState: number;
+  nextPlatformId: number;
+  nextFloorSequence: number;
+  options: {
+    conveyor: boolean;
+    spring: boolean;
+    rotating: boolean;
+    fast: boolean;
+  };
+}
+
 export interface GameEvent {
   type: GameEventType;
   playerId?: number;

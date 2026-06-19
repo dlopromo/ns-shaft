@@ -3,12 +3,14 @@ import type { Difficulty, GameStateSnapshot, InputFrame } from "../types";
 import type { OnlineMechanismOptions } from "./session";
 
 const STEP_MS = 1000 / 60;
-const REMOTE_TIMEOUT_MS = 5000;
-const REMOTE_RENDER_DELAY_MS = 100;
+const MIN_REMOTE_RENDER_DELAY_MS = 100;
+const MAX_REMOTE_RENDER_DELAY_MS = 250;
 
 export interface RaceSnapshot {
   playerId: 0 | 1;
   name: string;
+  round: number;
+  sequence: number;
   sentAt: number;
   finishedFloor: number;
   finishedAt?: number;
@@ -20,6 +22,7 @@ export interface OnlineRaceControllerConfig {
   difficulty: Difficulty;
   playerId: 0 | 1;
   playerName: string;
+  round?: number;
   snapshotIntervalTicks: number;
   options?: OnlineMechanismOptions;
   now?: () => number;
@@ -30,7 +33,9 @@ export function serializeRaceSnapshot(
   playerId: 0 | 1,
   name: string,
   sentAt: number,
-  state: GameStateSnapshot
+  state: GameStateSnapshot,
+  round = 0,
+  sequence = state.ticks
 ): RaceSnapshot {
   const detachedState: GameStateSnapshot = {
     ...state,
@@ -40,6 +45,8 @@ export function serializeRaceSnapshot(
   return {
     playerId,
     name,
+    round,
+    sequence,
     sentAt,
     finishedFloor: state.floor,
     ...(state.mode === "gameover" ? { finishedAt: sentAt } : {}),
@@ -50,13 +57,17 @@ export function serializeRaceSnapshot(
 export class OnlineRaceController {
   private readonly game: GameSimulation;
   private readonly now: () => number;
-  private readonly startedAt: number;
+  private startedAt: number | null = null;
   private latestRemote: RaceSnapshot | null = null;
   private previousRemote: RaceSnapshot | null = null;
   private previousRemoteReceivedAt: number | null = null;
   private remoteReceivedAt: number | null = null;
   private lastPublishedTick = -1;
   private lastPublishedMode: GameStateSnapshot["mode"] = "playing";
+  private nextSequence = 0;
+  private averageArrivalMs = MIN_REMOTE_RENDER_DELAY_MS;
+  private arrivalJitterMs = 0;
+  private renderDelayMs = MIN_REMOTE_RENDER_DELAY_MS;
 
   constructor(private readonly config: OnlineRaceControllerConfig) {
     this.game = new GameSimulation({
@@ -66,10 +77,16 @@ export class OnlineRaceController {
     });
     if (config.options) this.game.setOptions(config.options);
     this.now = config.now ?? Date.now;
+  }
+
+  beginPlaying(): void {
+    if (this.startedAt !== null) return;
     this.startedAt = this.now();
+    void this.publish(this.game.snapshot());
   }
 
   step(input: InputFrame): void {
+    this.beginPlaying();
     if (this.game.snapshot().mode !== "gameover") {
       this.game.step({
         players: [input.players[0], { left: false, right: false }],
@@ -84,18 +101,36 @@ export class OnlineRaceController {
     if (scheduled || modeChanged) {
       this.lastPublishedTick = state.ticks;
       this.lastPublishedMode = state.mode;
-      void this.config.sendSnapshot(serializeRaceSnapshot(
-        this.config.playerId,
-        this.config.playerName,
-        this.now(),
-        state
-      ));
+      void this.publish(state);
     }
+  }
+
+  private publish(state: GameStateSnapshot): Promise<void> {
+    return this.config.sendSnapshot(serializeRaceSnapshot(
+      this.config.playerId,
+      this.config.playerName,
+      this.now(),
+      state,
+      this.config.round ?? 0,
+      this.nextSequence++
+    ));
   }
 
   receiveSnapshot(snapshot: RaceSnapshot): void {
     if (snapshot.playerId === this.config.playerId) return;
-    if (this.latestRemote && snapshot.sentAt <= this.latestRemote.sentAt) return;
+    if (snapshot.round !== (this.config.round ?? 0)) return;
+    if (this.latestRemote && snapshot.sequence <= this.latestRemote.sequence) return;
+    const receivedAt = this.now();
+    if (this.remoteReceivedAt !== null) {
+      const interval = Math.max(0, receivedAt - this.remoteReceivedAt);
+      const delta = Math.abs(interval - this.averageArrivalMs);
+      this.averageArrivalMs += (interval - this.averageArrivalMs) * 0.25;
+      this.arrivalJitterMs += (delta - this.arrivalJitterMs) * 0.25;
+      this.renderDelayMs = Math.max(MIN_REMOTE_RENDER_DELAY_MS, Math.min(
+        MAX_REMOTE_RENDER_DELAY_MS,
+        this.averageArrivalMs + this.arrivalJitterMs * 2
+      ));
+    }
     this.previousRemote = this.latestRemote;
     this.previousRemoteReceivedAt = this.remoteReceivedAt;
     this.latestRemote = {
@@ -106,7 +141,7 @@ export class OnlineRaceController {
         platforms: snapshot.state.platforms.map((platform) => ({ ...platform }))
       }
     };
-    this.remoteReceivedAt = this.now();
+    this.remoteReceivedAt = receivedAt;
   }
 
   localSnapshot(): GameStateSnapshot {
@@ -122,6 +157,12 @@ export class OnlineRaceController {
     };
   }
 
+  remoteIdentity(): { playerId: 0 | 1; name: string } | null {
+    return this.latestRemote
+      ? { playerId: this.latestRemote.playerId, name: this.latestRemote.name }
+      : null;
+  }
+
   remoteRenderSnapshot(): GameStateSnapshot | null {
     if (!this.latestRemote) return null;
     if (!this.previousRemote || this.previousRemoteReceivedAt === null ||
@@ -130,7 +171,7 @@ export class OnlineRaceController {
     }
     const span = this.remoteReceivedAt - this.previousRemoteReceivedAt;
     if (span <= 0) return cloneGameState(this.latestRemote.state);
-    const targetTime = this.now() - REMOTE_RENDER_DELAY_MS;
+    const targetTime = this.now() - this.renderDelayMs;
     const amount = Math.max(0, Math.min(1,
       (targetTime - this.previousRemoteReceivedAt) / span
     ));
@@ -147,16 +188,18 @@ export class OnlineRaceController {
 
   status(): {
     remoteAgeMs: number | null;
-    remoteWaiting: boolean;
     localFinished: boolean;
     remoteFinished: boolean;
+    renderDelayMs: number;
   } {
-    const remoteAgeMs = this.now() - (this.remoteReceivedAt ?? this.startedAt);
+    const remoteAgeMs = this.startedAt === null
+      ? 0
+      : this.now() - (this.remoteReceivedAt ?? this.startedAt);
     return {
       remoteAgeMs,
-      remoteWaiting: remoteAgeMs >= REMOTE_TIMEOUT_MS,
       localFinished: this.game.snapshot().mode === "gameover",
-      remoteFinished: this.latestRemote?.state.mode === "gameover"
+      remoteFinished: this.latestRemote?.state.mode === "gameover",
+      renderDelayMs: this.renderDelayMs
     };
   }
 }

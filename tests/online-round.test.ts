@@ -5,8 +5,7 @@ import {
   ONLINE_RESULTS_MS,
   nextOnlineHostAction,
   onlineCountdownLabel,
-  onlineRaceResult,
-  shouldShowRemoteWaiting
+  onlineRaceResult
 } from "../src/game/online/round";
 
 describe("online round lifecycle", () => {
@@ -19,13 +18,6 @@ describe("online round lifecycle", () => {
     expect(onlineCountdownLabel(5000, 5000)).toBe("GO!");
     expect(onlineCountdownLabel(5499, 5000)).toBe("GO!");
     expect(onlineCountdownLabel(5500, 5000)).toBeNull();
-  });
-
-  test("shows the remote waiting overlay only during active play", () => {
-    expect(shouldShowRemoteWaiting("countdown", true)).toBe(false);
-    expect(shouldShowRemoteWaiting("playing", true)).toBe(true);
-    expect(shouldShowRemoteWaiting("results", true)).toBe(false);
-    expect(shouldShowRemoteWaiting("playing", false)).toBe(false);
   });
 
   test("keeps results visible for five seconds and compares floors", () => {

@@ -39,10 +39,3 @@ export function onlineRaceResult(localFloor: number, remoteFloor: number):
   if (localFloor === remoteFloor) return "DRAW";
   return localFloor > remoteFloor ? "YOU WIN" : "YOU LOSE";
 }
-
-export function shouldShowRemoteWaiting(
-  phase: OnlineRoomPhase | null,
-  remoteWaiting: boolean
-): boolean {
-  return phase === "playing" && remoteWaiting;
-}

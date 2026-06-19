@@ -12,5 +12,12 @@ export class SeededRandom {
     value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
     return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
   }
-}
 
+  exportState(): number {
+    return this.state >>> 0;
+  }
+
+  importState(state: number): void {
+    this.state = state >>> 0;
+  }
+}

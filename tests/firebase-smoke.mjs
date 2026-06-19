@@ -40,7 +40,7 @@ async function runRoomFlow(mode) {
       guest.goto(baseUrl, { waitUntil: "networkidle" })
     ]);
     await openOnline(host, `HOST-${mode.toUpperCase()}-QA`);
-    await host.locator("#online-mode").selectOption(mode);
+    await host.locator("#online-mode").selectOption("coop");
     await host.getByRole("button", { name: "部屋を作る" }).click();
     await host.waitForFunction(() => /^\d{4}$/.test(document.querySelector("#online-code")?.value ?? ""));
     roomCode = await host.locator("#online-code").inputValue();
@@ -50,7 +50,12 @@ async function runRoomFlow(mode) {
     await openOnline(guest, `GUEST-${mode.toUpperCase()}-QA`);
     await guest.locator("#online-code").fill(roomCode);
     await guest.getByRole("button", { name: "部屋に入る" }).click();
-    await guest.waitForTimeout(1500);
+    await Promise.all([
+      host.waitForFunction(() =>
+        document.querySelector('.online-player[data-player="1"]')?.dataset.status === "connected"),
+      guest.waitForFunction(() =>
+        document.querySelector('.online-player[data-player="0"]')?.dataset.status === "connected")
+    ]);
     const lobbyState = {
       hostStatus: await host.locator("#online-status").textContent(),
       guestStatus: await guest.locator("#online-status").textContent(),
@@ -59,6 +64,11 @@ async function runRoomFlow(mode) {
     };
     assert(lobbyState.hostGuest === "connected" && lobbyState.guestHost === "connected",
       `${mode}: lobby did not connect: ${JSON.stringify(lobbyState)}`);
+    await host.locator("#online-mode").selectOption(mode);
+    await Promise.all([
+      host.waitForFunction((expected) => JSON.parse(window.render_game_to_text()).online?.mode === expected, mode),
+      guest.waitForFunction((expected) => JSON.parse(window.render_game_to_text()).online?.mode === expected, mode)
+    ]);
 
     await Promise.all([
       host.getByRole("button", { name: "準備完了", exact: true }).click(),
@@ -89,6 +99,33 @@ async function runRoomFlow(mode) {
         host.waitForFunction(() => JSON.parse(window.render_game_to_text()).race?.remote !== null),
         guest.waitForFunction(() => JSON.parse(window.render_game_to_text()).race?.remote !== null)
       ]);
+      const labels = {
+        hostLocal: await host.locator(".race-pane-local header").textContent(),
+        hostRemote: await host.locator(".race-pane-remote header").textContent(),
+        guestLocal: await guest.locator(".race-pane-local header").textContent(),
+        guestRemote: await guest.locator(".race-pane-remote header").textContent()
+      };
+      assert(labels.hostLocal !== labels.hostRemote && labels.guestLocal !== labels.guestRemote,
+        `race: local and remote identity labels were duplicated: ${JSON.stringify(labels)}`);
+      await Promise.all([
+        host.keyboard.down("ArrowRight"),
+        guest.keyboard.down("ArrowLeft")
+      ]);
+      await host.waitForTimeout(150);
+      await Promise.all([
+        host.keyboard.up("ArrowRight"),
+        guest.keyboard.up("ArrowLeft")
+      ]);
+      await host.waitForTimeout(150);
+      const hostRace = (await gameState(host)).race;
+      const guestRace = (await gameState(guest)).race;
+      assert(Math.abs(hostRace.remote.players[0].x - guestRace.local.players[0].x) < 24,
+        "race: host remote pane is not following the guest");
+      assert(Math.abs(guestRace.remote.players[0].x - hostRace.local.players[0].x) < 24,
+        "race: guest remote pane is not following the host");
+      assert((await gameState(host)).online.connection === "healthy" &&
+        (await gameState(guest)).online.connection === "healthy",
+      "race: active opponent snapshots were classified as disconnected");
     } else {
       await Promise.all([
         host.waitForFunction(() => {
@@ -100,9 +137,38 @@ async function runRoomFlow(mode) {
           return state.online?.status?.phase === "playing" && state.ticks > 3;
         })
       ]);
+      const before = await gameState(host);
+      await Promise.all([
+        host.keyboard.down("ArrowRight"),
+        guest.keyboard.down("ArrowLeft")
+      ]);
+      await host.waitForTimeout(400);
+      await Promise.all([
+        host.keyboard.up("ArrowRight"),
+        guest.keyboard.up("ArrowLeft")
+      ]);
+      await host.waitForTimeout(350);
+      const [hostCoop, guestCoop] = await Promise.all([gameState(host), gameState(guest)]);
+      assert(hostCoop.players[0].x !== before.players[0].x &&
+        hostCoop.players[1].x !== before.players[1].x,
+      "coop: both arrow-key players did not move");
+      assert(hostCoop.online.connection === "healthy" && guestCoop.online.connection === "healthy",
+        "coop: active opponent batches were classified as disconnected");
+      await Promise.all([
+        host.waitForFunction(() =>
+          JSON.parse(window.render_game_to_text()).online?.sync?.peerStateMatch === true),
+        guest.waitForFunction(() =>
+          JSON.parse(window.render_game_to_text()).online?.sync?.peerStateMatch === true)
+      ]);
+      await guest.reload({ waitUntil: "domcontentloaded" });
+      await guest.waitForFunction(() => {
+        const state = JSON.parse(window.render_game_to_text());
+        return state.online?.phase === "playing" && state.online?.sync?.simulationTick > 0;
+      });
     }
 
     const pauseButton = mode === "race" ? "#race-pause" : "#pause-control";
+    await host.locator(pauseButton).waitFor({ state: "visible" });
     await host.locator(pauseButton).click();
     await Promise.all([
       host.waitForFunction(() => JSON.parse(window.render_game_to_text()).online?.pause !== null),

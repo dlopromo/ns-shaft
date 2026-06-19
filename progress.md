@@ -197,6 +197,28 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   `pause.resumeAt` fields at the snapshot boundary, then verified both modes
   against the published production rules through countdown, synchronized
   pause/resume, results and same-room rematch.
+- Rebuilt Online Co-op transport around deterministic three-frame input
+  batches with measured 6-15 tick buffering, retained-packet resend, bounded
+  Firebase cleanup, same-tick state hashes and host checkpoints. Both WAN
+  players now use their own arrow keys while Local 2P keeps its original
+  Arrow/Z-X controls.
+- Bound every Online transport subscription to the authoritative room mode,
+  round and exact opponent. Split Race no longer substitutes the local state
+  before the opponent arrives and now smooths remote motion with an adaptive
+  100-250ms jitter buffer.
+- Added non-destructive presence, a 60-second reconnect slot, automatic reload
+  resume and explicit onDisconnect cancellation on normal leave. Short Co-op
+  stalls display a communication state and resume when the missing batch
+  arrives instead of permanently freezing the simulation.
+- Extended the production Firebase two-context smoke test through post-join
+  mode switching, simultaneous arrow-key movement, same-tick hash agreement,
+  in-game guest reload recovery and bidirectional Split Race position checks.
+- Replaced single-signal disconnect checks with one Online connection monitor.
+  Five seconds without opponent traffic now shows only a non-blocking
+  `通信中...` indicator; the blocking disconnect dialog requires both stale
+  traffic and continuously false presence for 15 seconds. Co-op input/status
+  packets, guest checkpoints and Race snapshots all restore health
+  immediately, while lobby, countdown, pause and results suppress warnings.
 
 ## Remaining
 
