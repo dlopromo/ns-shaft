@@ -128,7 +128,7 @@ Playing --> GameOver: no living players
 
 Online 2P is implemented as a browser-native extension around the deterministic
 simulation rather than a new ruleset. The host creates a Firebase Realtime
-Database room with a six-digit numeric code, mode, selected difficulty,
+Database room under `/ns-shaft/rooms` with a four-digit numeric code, mode, selected difficulty,
 mechanism flags and a shared seed. The guest joins the same room and both
 players press Ready before the host starts a five-second countdown using the
 Firebase server-time offset. The room lifecycle is `lobby -> countdown ->
@@ -153,7 +153,7 @@ latest remote snapshots and interpolates them behind a 100ms local-time buffer;
 stale packets are discarded and authoritative result checks continue to use the
 latest uninterpolated snapshot. Only local events feed the audio system. Both
 online modes keep the Windows 1.3J assets and rules as their behavioral base,
-and online results remain outside the local Best 5.
+and completed runs submit to the namespaced Firebase global Best 5.
 
 Normal completion does not leave the room. Co-op waits until both players are
 dead; Split Race lets a finished player spectate until both runs finish. The
@@ -167,6 +167,9 @@ action. Room creation first attempts a Clipboard API write and retains a manual
 
 Firebase configuration is read only from local Vite environment variables
 (`.env.local`). The repository includes `.env.example` but no project keys.
+Anonymous Authentication must be enabled. `database.rules.json` closes the old
+root paths, limits rooms to four-digit codes, and makes leaderboard submissions
+authenticated, append-only, schema-validated, and indexed by floor.
 
 ## Reproduction Commands
 
@@ -180,6 +183,8 @@ npm run assets:objects
 npm test
 npm run test:browser
 npm run test:cross-browser
+npm run test:firebase-rules
+npm run test:firebase-browser
 # With the dev server running on port 5175 and local Firebase env configured:
 npm run test:firebase
 sh tools/unpack_mac.sh

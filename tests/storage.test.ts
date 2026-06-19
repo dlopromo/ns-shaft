@@ -1,23 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { createDefaultSave, loadSave, recordScore } from "../src/game/storage";
+import { createDefaultSave, loadSave } from "../src/game/storage";
 
 describe("save data", () => {
   test("falls back when persisted JSON is corrupt", () => {
     expect(loadSave("{broken")).toEqual(createDefaultSave());
-  });
-
-  test("keeps only the best five scores per difficulty", () => {
-    let save = createDefaultSave();
-    for (const score of [3, 9, 2, 11, 7, 5]) {
-      save = recordScore(save, "normal", { name: "AAA", floor: score });
-    }
-    expect(save.records.normal.map((entry) => entry.floor)).toEqual([11, 9, 7, 5, 3]);
-  });
-
-  test("does not mutate the original save object", () => {
-    const save = createDefaultSave();
-    recordScore(save, "easy", { name: "P1", floor: 12 });
-    expect(save.records.easy).toHaveLength(0);
   });
 
   test("merges a partial version-one save with current setting defaults", () => {
@@ -30,5 +16,26 @@ describe("save data", () => {
       difficulty: "hard", music: false, sound: true, fast: false,
       conveyor: true, spring: true, rotating: true
     });
+    expect(save.version).toBe(2);
+    expect(save.playerNames).toEqual(["PLAYER1", "PLAYER2"]);
+  });
+
+  test("normalizes persisted player names to eight uppercase alphanumerics", () => {
+    const save = loadSave(JSON.stringify({
+      ...createDefaultSave(),
+      playerNames: ["alice!?long", "bob-2"]
+    }));
+    expect(save.playerNames).toEqual(["ALICELON", "BOB2"]);
+  });
+
+  test("migrates version-one settings while ignoring legacy local records", () => {
+    const save = loadSave(JSON.stringify({
+      version: 1,
+      settings: createDefaultSave().settings,
+      records: { normal: [{ name: "OLD", floor: 99 }] },
+      lastInputName: "old"
+    }));
+    expect(save).not.toHaveProperty("records");
+    expect(save.playerNames[0]).toBe("OLD");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { AUDIO_EFFECTS, AUDIO_MANIFEST } from "../src/game/audio";
+import { AUDIO_EFFECTS, AUDIO_MANIFEST, MUSIC_MASTER_GAIN } from "../src/game/audio";
 
 describe("original audio manifest", () => {
   test("maps previewed WAVE resources to game events", () => {
@@ -23,6 +23,7 @@ describe("original audio manifest", () => {
 
   test("retains the original MIDI as the music source", () => {
     expect(AUDIO_MANIFEST.music).toBe(`${import.meta.env.BASE_URL}assets/BGM.MID`);
+    expect(MUSIC_MASTER_GAIN).toBe(0.1);
   });
 
   test("exposes each mapped event for manual preview", () => {

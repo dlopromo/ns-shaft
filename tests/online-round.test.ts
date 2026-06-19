@@ -28,8 +28,8 @@ describe("online round lifecycle", () => {
     expect(shouldShowRemoteWaiting("playing", false)).toBe(false);
   });
 
-  test("keeps results visible for three seconds and compares floors", () => {
-    expect(ONLINE_RESULTS_MS).toBe(3000);
+  test("keeps results visible for five seconds and compares floors", () => {
+    expect(ONLINE_RESULTS_MS).toBe(5000);
     expect(onlineRaceResult(12, 8)).toBe("YOU WIN");
     expect(onlineRaceResult(8, 12)).toBe("YOU LOSE");
     expect(onlineRaceResult(12, 12)).toBe("DRAW");

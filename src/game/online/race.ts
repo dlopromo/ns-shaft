@@ -3,7 +3,7 @@ import type { Difficulty, GameStateSnapshot, InputFrame } from "../types";
 import type { OnlineMechanismOptions } from "./session";
 
 const STEP_MS = 1000 / 60;
-const REMOTE_TIMEOUT_MS = 1500;
+const REMOTE_TIMEOUT_MS = 5000;
 const REMOTE_RENDER_DELAY_MS = 100;
 
 export interface RaceSnapshot {
@@ -50,6 +50,7 @@ export function serializeRaceSnapshot(
 export class OnlineRaceController {
   private readonly game: GameSimulation;
   private readonly now: () => number;
+  private readonly startedAt: number;
   private latestRemote: RaceSnapshot | null = null;
   private previousRemote: RaceSnapshot | null = null;
   private previousRemoteReceivedAt: number | null = null;
@@ -65,6 +66,7 @@ export class OnlineRaceController {
     });
     if (config.options) this.game.setOptions(config.options);
     this.now = config.now ?? Date.now;
+    this.startedAt = this.now();
   }
 
   step(input: InputFrame): void {
@@ -149,10 +151,10 @@ export class OnlineRaceController {
     localFinished: boolean;
     remoteFinished: boolean;
   } {
-    const remoteAgeMs = this.remoteReceivedAt === null ? null : this.now() - this.remoteReceivedAt;
+    const remoteAgeMs = this.now() - (this.remoteReceivedAt ?? this.startedAt);
     return {
       remoteAgeMs,
-      remoteWaiting: remoteAgeMs === null || remoteAgeMs > REMOTE_TIMEOUT_MS,
+      remoteWaiting: remoteAgeMs >= REMOTE_TIMEOUT_MS,
       localFinished: this.game.snapshot().mode === "gameover",
       remoteFinished: this.latestRemote?.state.mode === "gameover"
     };

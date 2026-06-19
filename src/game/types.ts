@@ -4,7 +4,7 @@ export type PlatformVariant =
   | "normal" | "spike" | "conveyor-left" | "conveyor-right"
   | "spring" | "disappearing";
 export type PlatformActivationState = "active" | "triggered" | "disappearing" | "gone";
-export type GameMode = "title" | "playing" | "paused" | "name-entry" | "records" | "gameover";
+export type GameMode = "title" | "playing" | "paused" | "records" | "gameover";
 export type PlayerPose = "stand" | "walk" | "jump" | "fall" | "hurt" | "dead";
 export type GameEventType =
   | "land" | "heal" | "hurt" | "spring" | "conveyor"
@@ -87,13 +87,8 @@ export interface GameEvent {
   platformKind?: PlatformKind;
 }
 
-export interface ScoreEntry {
-  name: string;
-  floor: number;
-}
-
 export interface SaveData {
-  version: 1;
+  version: 2;
   settings: {
     difficulty: Difficulty;
     music: boolean;
@@ -103,6 +98,6 @@ export interface SaveData {
     spring: boolean;
     rotating: boolean;
   };
-  records: Record<Difficulty, ScoreEntry[]>;
   lastInputName: string;
+  playerNames: [string, string];
 }

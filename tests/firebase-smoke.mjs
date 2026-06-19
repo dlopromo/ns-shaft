@@ -3,8 +3,7 @@ import { chromium } from "playwright";
 
 const baseUrl = process.env.NS_SHAFT_URL ?? "http://127.0.0.1:5175/?qa=1";
 const env = await readViteEnv();
-const databaseUrl = env.VITE_FIREBASE_DATABASE_URL?.replace(/\/$/, "");
-if (!databaseUrl) throw new Error("VITE_FIREBASE_DATABASE_URL is missing");
+if (!env.VITE_FIREBASE_DATABASE_URL) throw new Error("VITE_FIREBASE_DATABASE_URL is missing");
 
 const browser = await chromium.launch({ headless: true });
 const errors = [];
@@ -42,15 +41,15 @@ async function runRoomFlow(mode) {
     ]);
     await openOnline(host, `HOST-${mode.toUpperCase()}-QA`);
     await host.locator("#online-mode").selectOption(mode);
-    await host.getByRole("button", { name: "Create Room" }).click();
-    await host.waitForFunction(() => /^\d{6}$/.test(document.querySelector("#online-code")?.value ?? ""));
+    await host.getByRole("button", { name: "部屋を作る" }).click();
+    await host.waitForFunction(() => /^\d{4}$/.test(document.querySelector("#online-code")?.value ?? ""));
     roomCode = await host.locator("#online-code").inputValue();
     assert(await host.evaluate(() => navigator.clipboard.readText()) === roomCode,
       `${mode}: created room code was not copied`);
 
     await openOnline(guest, `GUEST-${mode.toUpperCase()}-QA`);
     await guest.locator("#online-code").fill(roomCode);
-    await guest.getByRole("button", { name: "Join Room" }).click();
+    await guest.getByRole("button", { name: "部屋に入る" }).click();
     await guest.waitForTimeout(1500);
     const lobbyState = {
       hostStatus: await host.locator("#online-status").textContent(),
@@ -62,8 +61,8 @@ async function runRoomFlow(mode) {
       `${mode}: lobby did not connect: ${JSON.stringify(lobbyState)}`);
 
     await Promise.all([
-      host.getByRole("button", { name: "Ready", exact: true }).click(),
-      guest.getByRole("button", { name: "Ready", exact: true }).click()
+      host.getByRole("button", { name: "準備完了", exact: true }).click(),
+      guest.getByRole("button", { name: "準備完了", exact: true }).click()
     ]);
     await Promise.all([
       waitForOnlinePhase(host, "countdown"),
@@ -103,13 +102,32 @@ async function runRoomFlow(mode) {
       ]);
     }
 
-    const resultsEndsAt = Date.now() + 1200;
-    const resultResponse = await fetch(`${databaseUrl}/rooms/${roomCode}/meta.json`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phase: "results", resultsEndsAt })
-    });
-    assert(resultResponse.ok, `${mode}: unable to enter results (${resultResponse.status})`);
+    const pauseButton = mode === "race" ? "#race-pause" : "#pause-control";
+    await host.locator(pauseButton).click();
+    await Promise.all([
+      host.waitForFunction(() => JSON.parse(window.render_game_to_text()).online?.pause !== null),
+      guest.waitForFunction(() => JSON.parse(window.render_game_to_text()).online?.pause !== null)
+    ]);
+    const pausedTicks = await Promise.all([
+      gameState(host).then((state) => state.ticks),
+      gameState(guest).then((state) => state.ticks)
+    ]);
+    await Promise.all([
+      host.getByRole("button", { name: "再開準備", exact: true }).click(),
+      guest.getByRole("button", { name: "再開準備", exact: true }).click()
+    ]);
+    await host.waitForFunction(() =>
+      JSON.parse(window.render_game_to_text()).online?.pause?.resumeAt !== null
+    );
+    await host.waitForTimeout(1000);
+    assert((await gameState(host)).ticks === pausedTicks[0] &&
+      (await gameState(guest)).ticks === pausedTicks[1], `${mode}: simulation advanced while paused`);
+    await Promise.all([
+      host.waitForFunction(() => JSON.parse(window.render_game_to_text()).online?.pause === null),
+      guest.waitForFunction(() => JSON.parse(window.render_game_to_text()).online?.pause === null)
+    ]);
+
+    await host.evaluate(() => window.__nsShaftQa.setOnlineRoundPhase("results", 1200));
     await Promise.all([
       waitForOnlinePhase(host, "results"),
       waitForOnlinePhase(guest, "results")
@@ -121,13 +139,13 @@ async function runRoomFlow(mode) {
     assert(await host.locator("#online-panel").isVisible() &&
       await guest.locator("#online-panel").isVisible(),
     `${mode}: clients did not return to lobby`);
-    assert(!await host.getByRole("button", { name: "Ready", exact: true }).isDisabled() &&
-      !await guest.getByRole("button", { name: "Ready", exact: true }).isDisabled(),
+    assert(!await host.getByRole("button", { name: "準備完了", exact: true }).isDisabled() &&
+      !await guest.getByRole("button", { name: "準備完了", exact: true }).isDisabled(),
     `${mode}: Ready was not reset`);
 
     await Promise.all([
-      host.getByRole("button", { name: "Ready", exact: true }).click(),
-      guest.getByRole("button", { name: "Ready", exact: true }).click()
+      host.getByRole("button", { name: "準備完了", exact: true }).click(),
+      guest.getByRole("button", { name: "準備完了", exact: true }).click()
     ]);
     await Promise.all([
       host.waitForFunction(() => {
@@ -143,25 +161,29 @@ async function runRoomFlow(mode) {
     return {
       mode,
       roomCode,
-      codeIsNumeric: /^\d{6}$/.test(roomCode),
+      codeIsNumeric: /^\d{4}$/.test(roomCode),
       clipboard: "copied",
       hostAndGuest: "connected",
       ready: "both",
       countdown: "five-seconds-frozen",
       gameplay: mode === "race" ? "remote-snapshots-visible" : "lockstep-advanced",
+      pause: "both-ready-three-second-resume",
       rematch: "same-room-round-2-countdown"
     };
   } finally {
-    if (roomCode) {
-      const response = await fetch(`${databaseUrl}/rooms/${roomCode}.json`, { method: "DELETE" });
-      if (!response.ok) errors.push(`${mode}-cleanup: Firebase returned ${response.status}`);
-    }
+    if (roomCode) await host.evaluate(() => {
+      const visibleAbort = [...document.querySelectorAll("#abort-control, #race-abort")]
+        .find((element) => !element.hidden);
+      if (visibleAbort instanceof HTMLElement) visibleAbort.click();
+      else document.querySelector("#online-panel [data-close]")?.click();
+    }).catch(() => undefined);
+    await host.waitForTimeout(300).catch(() => undefined);
     await Promise.all([hostContext.close(), guestContext.close()]);
   }
 }
 
 async function openOnline(page, name) {
-  await page.getByRole("button", { name: "ONLINE 2P" }).click();
+  await page.getByRole("button", { name: "オンライン2P" }).click();
   await page.locator("#online-name").fill(name);
 }
 

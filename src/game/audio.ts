@@ -48,6 +48,7 @@ export const AUDIO_MANIFEST = {
 };
 
 export type EffectName = keyof typeof AUDIO_MANIFEST.effects;
+export const MUSIC_MASTER_GAIN = 0.1;
 
 export class GameAudio {
   private context?: AudioContext;
@@ -55,6 +56,8 @@ export class GameAudio {
   private musicTimer?: number;
   private musicGain?: GainNode;
   private midi?: Midi;
+  private musicLoopEndsAt?: number;
+  private pausedLoopRemainingMs?: number;
   musicEnabled = true;
   soundEnabled = true;
 
@@ -124,7 +127,7 @@ export class GameAudio {
       }
     }
     this.musicGain = this.context!.createGain();
-    this.musicGain.gain.value = 0.025;
+    this.musicGain.gain.value = MUSIC_MASTER_GAIN;
     this.musicGain.connect(this.context!.destination);
     const play = () => {
       if (!this.context || !this.musicGain || !this.musicEnabled || !this.midi) return;
@@ -149,15 +152,59 @@ export class GameAudio {
           oscillator.stop(start + note.time + Math.max(0.05, note.duration));
         }
       }
+      const durationMs = Math.max(500, this.midi.duration * 1000);
+      this.musicLoopEndsAt = start + durationMs / 1000;
+      this.musicTimer = window.setTimeout(play, durationMs);
     };
     play();
-    this.musicTimer = window.setInterval(play, Math.max(500, this.midi.duration * 1000));
   }
 
   stopMusic(): void {
-    if (this.musicTimer !== undefined) window.clearInterval(this.musicTimer);
+    if (this.musicTimer !== undefined) window.clearTimeout(this.musicTimer);
     this.musicTimer = undefined;
+    this.musicLoopEndsAt = undefined;
+    this.pausedLoopRemainingMs = undefined;
     this.musicGain?.disconnect();
     this.musicGain = undefined;
+  }
+
+  async suspend(): Promise<void> {
+    if (this.context?.state !== "running") return;
+    if (this.musicTimer !== undefined) {
+      window.clearTimeout(this.musicTimer);
+      this.musicTimer = undefined;
+      this.pausedLoopRemainingMs = Math.max(
+        0,
+        ((this.musicLoopEndsAt ?? this.context.currentTime) - this.context.currentTime) * 1000
+      );
+    }
+    await this.context.suspend();
+  }
+
+  async resume(): Promise<void> {
+    if (this.context?.state !== "suspended") return;
+    await this.context.resume();
+    if (this.musicGain && this.midi && this.musicEnabled && this.musicTimer === undefined) {
+      const delay = this.pausedLoopRemainingMs ?? Math.max(500, this.midi.duration * 1000);
+      this.pausedLoopRemainingMs = undefined;
+      this.musicTimer = window.setTimeout(() => {
+        this.musicTimer = undefined;
+        void this.startMusic();
+      }, delay);
+    }
+  }
+
+  status(): {
+    contextState: AudioContextState | "unavailable";
+    midiLoaded: boolean;
+    musicActive: boolean;
+    musicGain: number;
+  } {
+    return {
+      contextState: this.context?.state ?? "unavailable",
+      midiLoaded: Boolean(this.midi),
+      musicActive: Boolean(this.musicGain),
+      musicGain: this.musicGain?.gain.value ?? 0
+    };
   }
 }

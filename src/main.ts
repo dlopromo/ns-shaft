@@ -4,10 +4,17 @@ import { KeyboardInput } from "./game/input";
 import { Renderer } from "./game/renderer";
 import { integerScaleForViewport } from "./game/layout";
 import { GameSimulation } from "./game/simulation";
-import { loadSave, recordScore, SAVE_KEY } from "./game/storage";
+import { loadSave, SAVE_KEY } from "./game/storage";
+import { t } from "./game/i18n";
+import { normalizePlayerName } from "./game/player-name";
+import {
+  FirebaseLeaderboard,
+  type LeaderboardMode,
+  type RankedLeaderboardEntry
+} from "./game/leaderboard";
 import { OnlineGameController } from "./game/online/controller";
 import { copyRoomCode } from "./game/online/clipboard";
-import { createRealtimeDatabasePort } from "./game/online/firebase";
+import { createRealtimeDatabasePort, type RealtimeDatabasePort } from "./game/online/firebase";
 import { buildLobbyView, type LobbyRoomData } from "./game/online/lobby";
 import {
   OnlineRaceController,
@@ -16,12 +23,18 @@ import {
 } from "./game/online/race";
 import { buildFirebaseConfig, validateRoomCode } from "./game/online/room";
 import {
+  normalizeOnlinePause,
+  onlineConnectionState,
+  requestOnlinePause,
+  schedulePauseResume,
+  type OnlinePauseState
+} from "./game/online/pause";
+import {
   ONLINE_COUNTDOWN_MS,
   ONLINE_RESULTS_MS,
   nextOnlineHostAction,
   onlineCountdownLabel,
   onlineRaceResult,
-  shouldShowRemoteWaiting,
   type OnlineRoomPhase
 } from "./game/online/round";
 import {
@@ -43,6 +56,7 @@ interface OnlineRoomMeta {
   resultsEndsAt?: number | null;
   hostConnected?: boolean;
   guestConnected?: boolean;
+  pause?: OnlinePauseState;
 }
 
 interface OnlineRoomData extends LobbyRoomData {
@@ -59,7 +73,8 @@ declare global {
       setProgress: (floorSequence: number) => void;
       startRace: () => void;
       setRaceRemotePlayer: (patch: Record<string, unknown>) => void;
-      setOnlineRoundPhase: (phase: OnlineRoomPhase, endsInMs?: number) => void;
+      setOnlineRoundPhase: (phase: OnlineRoomPhase, endsInMs?: number) => void | Promise<void>;
+      setOnlinePause: (pause: OnlinePauseState) => void;
       showOnlineLobby: (
         players: LobbyRoomData["players"],
         localPlayerId?: 0 | 1
@@ -91,7 +106,7 @@ root.innerHTML = `
         <nav class="main-menu">
           <button data-start="1">１人プレイ</button>
           <button data-start="2">２人プレイ</button>
-          <button data-open="online">ONLINE 2P</button>
+          <button data-open="online">オンライン2P</button>
           <button data-open="records">ベスト５</button>
           <button data-open="options">オプション</button>
           <button data-open="about">このソフトについて</button>
@@ -109,6 +124,10 @@ root.innerHTML = `
               <option value="hard">むずかしい</option>
             </select>
           </label>
+          <div class="player-name-settings">
+            <label>1P NAME <input id="player1-name" autocomplete="off"></label>
+            <label>2P NAME <input id="player2-name" autocomplete="off"></label>
+          </div>
           <label><input id="conveyor" type="checkbox"> ベルトコンベア</label>
           <label><input id="spring" type="checkbox"> ジャンプ台</label>
           <label><input id="rotating" type="checkbox"> 回る床</label>
@@ -126,9 +145,14 @@ root.innerHTML = `
       <section id="records-panel" class="screen records-screen" hidden>
         <div class="records-content">
           <h2>BEST 5</h2>
+          <nav id="record-modes" class="record-modes" aria-label="ランキングモード">
+            <button type="button" data-record-mode="solo">1P</button>
+            <button type="button" data-record-mode="local2p">2P</button>
+            <button type="button" data-record-mode="coop">協力</button>
+            <button type="button" data-record-mode="race">対戦</button>
+          </nav>
           <div id="records-list"></div>
           <div class="dialog-actions">
-            <button id="clear-records">記録消去</button>
             <button data-close>戻る</button>
           </div>
         </div>
@@ -136,32 +160,32 @@ root.innerHTML = `
 
       <section id="online-panel" class="screen dialog-screen" hidden>
         <div class="dialog online-dialog">
-          <h2>ONLINE 2P</h2>
-          <p id="online-status">Create a room or join with a 4 digit code.</p>
-          <label>Mode
+          <h2>${t("online.title")}</h2>
+          <p id="online-status">${t("online.description")}</p>
+          <label>${t("online.mode.label")}
             <select id="online-mode">
-              <option value="coop">Co-op 2P</option>
-              <option value="race">Split Race</option>
+              <option value="coop">${t("online.mode.coop")}</option>
+              <option value="race">${t("online.mode.race")}</option>
             </select>
           </label>
-          <label>名前 <input id="online-name" maxlength="12" autocomplete="off" value="PLAYER"></label>
-          <section id="online-players" class="online-players" aria-label="Room players" hidden>
+          <label>${t("online.name")} <input id="online-name" autocomplete="off" value="PLAYER1"></label>
+          <section id="online-players" class="online-players" aria-label="ルームのプレイヤー" hidden>
             <div class="online-player" data-player="0" data-status="waiting">
-              <span>P1 HOST</span><b>---</b><strong>WAITING</strong>
+              <span>1P ホスト</span><b>---</b><strong>${t("online.waiting")}</strong>
             </div>
             <div class="online-player" data-player="1" data-status="waiting">
-              <span>P2 GUEST</span><b>---</b><strong>WAITING</strong>
+              <span>2P ゲスト</span><b>---</b><strong>${t("online.waiting")}</strong>
             </div>
           </section>
           <div class="dialog-actions">
-            <button id="online-create" type="button">Create Room</button>
-            <button id="online-ready" type="button" data-state="available" disabled>Ready</button>
+            <button id="online-create" type="button">${t("online.room.create")}</button>
+            <button id="online-ready" type="button" data-state="available" disabled>${t("online.ready")}</button>
           </div>
-          <label>Room Code <input id="online-code" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label>
+          <label>${t("online.room.code")} <input id="online-code" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label>
           <div class="dialog-actions">
-            <button id="online-join" type="button">Join Room</button>
-            <button id="online-copy" type="button" disabled>Copy Code</button>
-            <button data-close type="button">戻る</button>
+            <button id="online-join" type="button">${t("online.room.join")}</button>
+            <button id="online-copy" type="button" disabled>${t("online.room.copy")}</button>
+            <button data-close type="button">${t("online.back")}</button>
           </div>
         </div>
       </section>
@@ -171,38 +195,33 @@ root.innerHTML = `
         <button data-close>戻る</button>
       </section>
 
-      <section id="name-panel" class="screen dialog-screen" hidden>
-        <form id="name-form" class="dialog">
-          <h2>BEST 5 入賞</h2>
-          <p id="final-score"></p>
-          <label>名前 <input id="player-name" maxlength="12" autocomplete="off"></label>
-          <button type="submit">登録</button>
-        </form>
-      </section>
-
-      <section id="online-scoreboard" class="screen dialog-screen" hidden>
-        <div class="dialog">
-          <h2 id="scoreboard-title">GAME OVER</h2>
-          <p id="scoreboard-detail"></p>
-          <button id="scoreboard-lobby">戻る</button>
+      <section id="online-state" class="online-state" hidden>
+        <div class="online-state-dialog">
+          <h2 id="online-state-title"></h2>
+          <p id="online-state-detail"></p>
+          <div id="online-pause-players" class="online-pause-players" hidden>
+            <span>1P</span><strong data-pause-player="0">${t("online.waiting")}</strong>
+            <span>2P</span><strong data-pause-player="1">${t("online.waiting")}</strong>
+          </div>
+          <div id="online-state-actions" class="dialog-actions" hidden>
+            <button id="online-state-ready" type="button">${t("online.pause.ready")}</button>
+            <button id="online-state-leave" type="button">${t("online.room.leave")}</button>
+          </div>
         </div>
       </section>
     </section>
-    <section id="race-stage" class="race-stage" aria-label="Online split-screen race" hidden>
+    <section id="race-stage" class="race-stage" aria-label="オンライン対戦" hidden>
       <div class="race-strip">
         <article class="race-pane race-pane-local" data-role="local" data-player-color="yellow">
-          <header>YOU</header>
-          <canvas id="race-local" class="race-canvas" aria-label="Your race game"></canvas>
+          <header>1P</header>
+          <canvas id="race-local" class="race-canvas" aria-label="1Pゲーム画面"></canvas>
+          <button id="race-pause" class="frame-control pause-control" aria-label="暫停"></button>
+          <button id="race-abort" class="frame-control abort-control" aria-label="中止遊戲"></button>
         </article>
         <article class="race-pane race-pane-remote" data-role="remote" data-player-color="green">
-          <header>OPPONENT</header>
-          <canvas id="race-remote" class="race-canvas" aria-label="Opponent race game"></canvas>
+          <header>2P</header>
+          <canvas id="race-remote" class="race-canvas" aria-label="2Pゲーム画面"></canvas>
         </article>
-        <div class="race-actions">
-          <span id="race-status">ONLINE SPLIT RACE</span>
-          <button id="race-pause" type="button">暫停</button>
-          <button id="race-abort" type="button">中止遊戲</button>
-        </div>
       </div>
     </section>
   </main>`;
@@ -213,13 +232,10 @@ const gameFrame = document.querySelector<HTMLElement>(".game-frame")!;
 const title = document.querySelector<HTMLElement>("#title-screen")!;
 const optionsPanel = document.querySelector<HTMLElement>("#options-panel")!;
 const recordsPanel = document.querySelector<HTMLElement>("#records-panel")!;
+const player1Name = document.querySelector<HTMLInputElement>("#player1-name")!;
+const player2Name = document.querySelector<HTMLInputElement>("#player2-name")!;
 const onlinePanel = document.querySelector<HTMLElement>("#online-panel")!;
 const aboutPanel = document.querySelector<HTMLElement>("#about-panel")!;
-const namePanel = document.querySelector<HTMLElement>("#name-panel")!;
-const scoreboardPanel = document.querySelector<HTMLElement>("#online-scoreboard")!;
-const scoreboardTitle = document.querySelector<HTMLElement>("#scoreboard-title")!;
-const scoreboardDetail = document.querySelector<HTMLElement>("#scoreboard-detail")!;
-const scoreboardLobby = document.querySelector<HTMLButtonElement>("#scoreboard-lobby")!;
 const difficulty = document.querySelector<HTMLSelectElement>("#difficulty")!;
 const onlineStatus = document.querySelector<HTMLElement>("#online-status")!;
 const onlineMode = document.querySelector<HTMLSelectElement>("#online-mode")!;
@@ -232,10 +248,17 @@ const onlineCopy = document.querySelector<HTMLButtonElement>("#online-copy")!;
 const onlinePlayers = document.querySelector<HTMLElement>("#online-players")!;
 const pauseControl = document.querySelector<HTMLButtonElement>("#pause-control")!;
 const abortControl = document.querySelector<HTMLButtonElement>("#abort-control")!;
+const onlineState = document.querySelector<HTMLElement>("#online-state")!;
+const onlineStateTitle = document.querySelector<HTMLElement>("#online-state-title")!;
+const onlineStateDetail = document.querySelector<HTMLElement>("#online-state-detail")!;
+const onlinePausePlayers = document.querySelector<HTMLElement>("#online-pause-players")!;
+const onlineStateActions = document.querySelector<HTMLElement>("#online-state-actions")!;
+const onlineStateReady = document.querySelector<HTMLButtonElement>("#online-state-ready")!;
+const onlineStateLeave = document.querySelector<HTMLButtonElement>("#online-state-leave")!;
 const raceStage = document.querySelector<HTMLElement>("#race-stage")!;
-const raceStatus = document.querySelector<HTMLElement>("#race-status")!;
 const racePause = document.querySelector<HTMLButtonElement>("#race-pause")!;
 const raceAbort = document.querySelector<HTMLButtonElement>("#race-abort")!;
+const raceLocalPane = document.querySelector<HTMLElement>(".race-pane-local")!;
 const raceLocalCanvas = document.querySelector<HTMLCanvasElement>("#race-local")!;
 const raceRemoteCanvas = document.querySelector<HTMLCanvasElement>("#race-remote")!;
 const raceLocalLabel = document.querySelector<HTMLElement>(".race-pane-local header")!;
@@ -250,6 +273,8 @@ let game: GameSimulation | null = null;
 let onlineGame: OnlineGameController | null = null;
 let onlineRace: OnlineRaceController | null = null;
 let onlineSession: FirebaseOnlineSession | null = null;
+let firebaseDatabase: RealtimeDatabasePort | null = null;
+let leaderboard: FirebaseLeaderboard | null = null;
 let onlineRoom: OnlineRoomHandle | null = null;
 let unsubscribeOnlineRoom: (() => void) | null = null;
 let unsubscribeOnlineInputs: (() => void) | null = null;
@@ -259,7 +284,11 @@ let onlinePhase: OnlineRoomPhase | null = null;
 let onlineServerOffsetMs = 0;
 let onlineTransitionPending = false;
 let onlinePreparedRound = -1;
+let wasOnlinePaused = false;
 let playerCount: 1 | 2 = 1;
+let activeLeaderboardMode: LeaderboardMode = "solo";
+let selectedRecordMode: LeaderboardMode = "solo";
+let submittedOnlineRound = -1;
 let accumulator = 0;
 let lastTime = performance.now();
 let scoreHandled = false;
@@ -273,9 +302,18 @@ function persist(): void {
 }
 
 function syncRendererSettings(): void {
+  let recordFloor = 0;
+  try {
+    recordFloor = getLeaderboard().cachedWorldRecord(
+      activeLeaderboardMode,
+      save.settings.difficulty
+    );
+  } catch {
+    // A missing Firebase config must not block the offline game.
+  }
   const settings = {
     fast: save.settings.fast,
-    recordFloor: save.records[save.settings.difficulty][0]?.floor ?? 0
+    recordFloor
   };
   renderer.configure(settings);
   raceLocalRenderer.configure(settings);
@@ -288,6 +326,8 @@ function onlineServerNow(): number {
 
 function applySettingsToControls(): void {
   difficulty.value = save.settings.difficulty;
+  player1Name.value = save.playerNames[0];
+  player2Name.value = save.playerNames[1];
   for (const key of ["conveyor", "spring", "rotating", "music", "sound", "fast"] as const) {
     document.querySelector<HTMLInputElement>(`#${key}`)!.checked = save.settings[key];
   }
@@ -299,12 +339,49 @@ function closePanels(): void {
   recordsPanel.hidden = true;
   onlinePanel.hidden = true;
   aboutPanel.hidden = true;
-  namePanel.hidden = true;
-  scoreboardPanel.hidden = true;
+}
+
+function getFirebaseDatabase(): RealtimeDatabasePort {
+  if (firebaseDatabase) return firebaseDatabase;
+  const config = buildFirebaseConfig(import.meta.env as Record<string, string | undefined>);
+  firebaseDatabase = createRealtimeDatabasePort(config);
+  return firebaseDatabase;
+}
+
+function getLeaderboard(): FirebaseLeaderboard {
+  if (!leaderboard) {
+    leaderboard = new FirebaseLeaderboard(getFirebaseDatabase());
+    void leaderboard.retryPending().catch(() => undefined);
+  }
+  return leaderboard;
+}
+
+function submitLeaderboardScore(
+  input: Parameters<FirebaseLeaderboard["submit"]>[0]
+): void {
+  try {
+    void getLeaderboard().submit(input).catch(() => undefined);
+  } catch {
+    // Local gameplay remains available when Firebase is not configured.
+  }
+}
+
+async function refreshWorldRecord(mode: LeaderboardMode, difficultyLevel: Difficulty): Promise<void> {
+  activeLeaderboardMode = mode;
+  syncRendererSettings();
+  try {
+    await getLeaderboard().loadTop(mode, difficultyLevel);
+  } catch {
+    // Keep the last successful cached record while offline.
+  }
+  if (activeLeaderboardMode === mode && save.settings.difficulty === difficultyLevel) {
+    syncRendererSettings();
+  }
 }
 
 async function start(players: 1 | 2): Promise<void> {
   playerCount = players;
+  activeLeaderboardMode = players === 1 ? "solo" : "local2p";
   onlineGame = null;
   onlineRace = null;
   scoreHandled = false;
@@ -326,6 +403,7 @@ async function start(players: 1 | 2): Promise<void> {
   pauseControl.hidden = false;
   abortControl.hidden = false;
   renderer.render(game.snapshot());
+  void refreshWorldRecord(activeLeaderboardMode, save.settings.difficulty);
 }
 
 function showTitle(): void {
@@ -343,40 +421,50 @@ function showTitle(): void {
   abortControl.hidden = true;
 }
 
-function togglePause(): void {
+async function togglePause(): Promise<void> {
   if (onlineRoom && onlinePhase !== "playing") return;
   if ((!game && !onlineRace && !onlineGame) || game?.snapshot().mode === "gameover" ||
       onlineGame?.snapshot().mode === "gameover" ||
       onlineRace?.localSnapshot().mode === "gameover") return;
-  const idle: InputFrame = {
-    players: [{ left: false, right: false }, { left: false, right: false }],
-    pausePressed: true
-  };
-  update(idle, 0);
-}
-
-function qualifiesForRecord(state: GameStateSnapshot): boolean {
-  const records = save.records[state.difficulty];
-  return playerCount === 1 && state.floor > 0 &&
-    (records.length < 5 || state.floor > records[records.length - 1].floor);
+  if (!onlineRoom) {
+    const idle: InputFrame = {
+      players: [{ left: false, right: false }, { left: false, right: false }],
+      pausePressed: true
+    };
+    update(idle, 0);
+    if (game?.snapshot().mode === "paused") await audio.suspend();
+    else await audio.resume();
+    return;
+  }
+  if (onlineRoomData?.meta?.pause) return;
+  await getOnlineSession().updateMeta(onlineRoom.roomCode, {
+    pause: requestOnlinePause(onlineRoom.playerId)
+  });
 }
 
 function handleGameOver(state: GameStateSnapshot): void {
   if (scoreHandled) return;
   scoreHandled = true;
   audio.stopMusic();
-  if (qualifiesForRecord(state)) {
-    document.querySelector("#final-score")!.textContent = `${state.floor} 階`;
-    const input = document.querySelector<HTMLInputElement>("#player-name")!;
-    input.value = save.lastInputName;
-    namePanel.hidden = false;
-    input.focus();
+  if (state.floor > 0) {
+    submitLeaderboardScore({
+      mode: playerCount === 1 ? "solo" : "local2p",
+      difficulty: state.difficulty,
+      player1: save.playerNames[0],
+      ...(playerCount === 2 ? { player2: save.playerNames[1] } : {}),
+      floor: state.floor
+    });
   }
 }
 
 function update(input: InputFrame, elapsedMs = STEP_MS): void {
+  const onlinePaused = onlineRoomData?.meta?.pause != null;
+  if (onlineRoom && onlinePhase === "playing" && input.pausePressed && !onlinePaused) {
+    void togglePause();
+    return;
+  }
   if (onlineRace) {
-    if (onlinePhase === "playing") onlineRace.step(input);
+    if (onlinePhase === "playing" && !onlinePaused) onlineRace.step(input);
     const local = onlineRace.localSnapshot();
     const remote = onlineRace.remoteRenderSnapshot();
     audio.consume(onlineRace.drainEvents());
@@ -387,7 +475,7 @@ function update(input: InputFrame, elapsedMs = STEP_MS): void {
     return;
   }
   if (onlineGame) {
-    if (onlinePhase === "playing") onlineGame.step(input);
+    if (onlinePhase === "playing" && !onlinePaused) onlineGame.step(input);
     const state = onlineGame.snapshot();
     audio.consume(onlineGame.drainEvents());
     renderer.render(state);
@@ -416,22 +504,37 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 
-function renderRecords(): void {
+async function renderRecords(): Promise<void> {
   const names: Record<Difficulty, string> = { easy: "やさしい", normal: "ふつう", hard: "むずかしい" };
-  document.querySelector("#records-list")!.innerHTML = (["easy", "normal", "hard"] as Difficulty[])
-    .map((level) => `
-      <section><h3>${names[level]}</h3><ol>${
-        Array.from({ length: 5 }, (_, index) => {
-          const entry = save.records[level][index];
-          return `<li><span>${entry?.name ?? "--------"}</span><b>${entry?.floor ?? 0} 階</b></li>`;
-        }).join("")
-      }</ol></section>`).join("");
+  let service: FirebaseLeaderboard;
+  try {
+    service = getLeaderboard();
+  } catch {
+    document.querySelector("#records-list")!.innerHTML = "<p>ランキングに接続できません。</p>";
+    return;
+  }
+  document.querySelectorAll<HTMLElement>("[data-record-mode]").forEach((button) => {
+    button.dataset.active = String(button.dataset.recordMode === selectedRecordMode);
+  });
+  const levels = ["easy", "normal", "hard"] as Difficulty[];
+  const results = await Promise.all(levels.map(async (level) => {
+    try {
+      return await service.loadTop(selectedRecordMode, level);
+    } catch {
+      return service.cachedTop(selectedRecordMode, level);
+    }
+  }));
+  document.querySelector("#records-list")!.innerHTML = levels.map((level, levelIndex) => `
+    <section><h3>${names[level]}</h3><ol>${Array.from({ length: 5 }, (_, index) => {
+      const entry: RankedLeaderboardEntry | undefined = results[levelIndex][index];
+      const players = entry ? [entry.player1, entry.player2].filter(Boolean).join(" / ") : "--------";
+      return `<li><span>${players}</span><b>${entry?.floor ?? 0} 階</b></li>`;
+    }).join("")}</ol></section>`).join("");
 }
 
 function getOnlineSession(): FirebaseOnlineSession {
   if (onlineSession) return onlineSession;
-  const config = buildFirebaseConfig(import.meta.env as Record<string, string | undefined>);
-  onlineSession = new FirebaseOnlineSession(createRealtimeDatabasePort(config));
+  onlineSession = new FirebaseOnlineSession(getFirebaseDatabase());
   return onlineSession;
 }
 
@@ -443,6 +546,19 @@ function setOnlineStatus(
   onlineStatus.dataset.tone = tone;
 }
 
+function onlineErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  if (message.includes("4 digits")) return t("online.error.roomCode");
+  if (message.includes("already exists") || message.includes("allocate room")) {
+    return t("online.error.roomExists");
+  }
+  if (message.includes("not found")) return t("online.error.roomMissing");
+  if (message.includes("full")) return t("online.error.roomFull");
+  if (message.includes("not in lobby")) return t("online.error.roomBusy");
+  if (message.toLowerCase().includes("auth")) return t("online.error.auth");
+  return t("online.error.network");
+}
+
 function enterOnlineRoom(role: "host" | "guest"): void {
   onlineCreate.hidden = true;
   onlineJoin.hidden = true;
@@ -451,7 +567,7 @@ function enterOnlineRoom(role: "host" | "guest"): void {
   onlinePlayers.hidden = false;
   onlineReady.disabled = true;
   onlineReady.dataset.state = "available";
-  onlineReady.textContent = "Ready";
+  onlineReady.textContent = t("online.ready");
   // ponytail: host can change mode, guest sees it read-only
   const modeLabel = onlineMode.closest("label")!;
   modeLabel.hidden = false;
@@ -482,7 +598,7 @@ function exitOnlineRoom(): void {
   onlinePlayers.hidden = true;
   onlineReady.disabled = true;
   onlineReady.dataset.state = "available";
-  onlineReady.textContent = "Ready";
+  onlineReady.textContent = t("online.ready");
 }
 
 function renderOnlineLobby(room: LobbyRoomData, localPlayerId: 0 | 1): void {
@@ -504,25 +620,23 @@ async function copyCurrentRoomCode(): Promise<void> {
   if (!onlineRoom) return;
   const result = await copyRoomCode(onlineRoom.roomCode, navigator.clipboard);
   if (result === "copied") {
-    setOnlineStatus(`Room ${onlineRoom.roomCode} copied. Share this code.`, "success");
+    setOnlineStatus(t("online.room.copied", { code: onlineRoom.roomCode }), "success");
     return;
   }
   onlineCode.focus();
   onlineCode.select();
-  setOnlineStatus(
-    `Room ${onlineRoom.roomCode} created. Clipboard ${result}; copy the selected code.`,
-    "error"
-  );
+  setOnlineStatus(t("online.room.created", { code: onlineRoom.roomCode }), "error");
 }
 
 function onlinePlayerName(): string {
-  return onlineName.value.trim().slice(0, 12) || "PLAYER";
+  return normalizePlayerName(onlineName.value, onlineRoom?.playerId === 1 ? "PLAYER2" : "PLAYER1");
 }
 
 function showOnlineRoomLobby(room: OnlineRoomHandle, roomData: OnlineRoomData): void {
   onlineGame = null;
   onlineRace = null;
   onlinePreparedRound = -1;
+  wasOnlinePaused = false;
   audio.stopMusic();
   closePanels();
   title.hidden = true;
@@ -532,26 +646,11 @@ function showOnlineRoomLobby(room: OnlineRoomHandle, roomData: OnlineRoomData): 
   cabinet.classList.remove("race-active");
   pauseControl.hidden = true;
   abortControl.hidden = true;
+  onlineState.hidden = true;
+  gameFrame.append(onlineState);
   enterOnlineRoom(room.role);
   renderOnlineLobby(roomData, room.playerId);
   updateFullscreenScale();
-}
-
-function showOnlineScoreboard(): void {
-  let title = "GAME OVER";
-  let detail = "";
-  if (onlineRace) {
-    const local = onlineRace.localSnapshot();
-    const remote = onlineRace.remoteSnapshot();
-    title = onlineRaceResult(local.floor, remote?.floor ?? 0);
-    detail = `YOU ${local.floor} · OPPONENT ${remote?.floor ?? "--"}`;
-  } else if (onlineGame) {
-    detail = `Floor ${onlineGame.snapshot().floor}`;
-  }
-  closePanels();
-  scoreboardTitle.textContent = title;
-  scoreboardDetail.textContent = detail;
-  scoreboardPanel.hidden = false;
 }
 
 function onlineRoundFinished(): boolean {
@@ -563,13 +662,57 @@ function onlineRoundFinished(): boolean {
   return false;
 }
 
+async function submitOnlineResult(room: OnlineRoomHandle, data: OnlineRoomData): Promise<void> {
+  const round = data.meta?.round ?? 0;
+  if (submittedOnlineRound === round) return;
+  const mode = data.meta?.mode ?? room.mode;
+  if (mode === "coop" && room.role !== "host") return;
+  const result = mode === "race" ? onlineRace?.localSnapshot() : onlineGame?.snapshot();
+  if (result?.mode !== "gameover") return;
+  const floor = result.floor;
+  if (!floor || floor < 1) return;
+  submittedOnlineRound = round;
+  const difficultyLevel = data.meta?.difficulty ?? save.settings.difficulty;
+  const localName = data.players?.[room.playerId]?.name ?? onlinePlayerName();
+  await getLeaderboard().submit({
+    mode,
+    difficulty: difficultyLevel,
+    player1: mode === "coop" ? data.players?.[0]?.name ?? "PLAYER1" : localName,
+    ...(mode === "coop" ? { player2: data.players?.[1]?.name ?? "PLAYER2" } : {}),
+    floor
+  });
+}
+
 async function driveOnlineRoundLifecycle(): Promise<void> {
   const room = onlineRoom;
   const data = onlineRoomData;
   if (!room || room.role !== "host" || !data?.meta || onlineTransitionPending) return;
+  const now = onlineServerNow();
+  const pause = data.meta.pause ?? null;
+  if (pause?.resumeAt !== null && pause?.resumeAt !== undefined && now >= pause.resumeAt) {
+    onlineTransitionPending = true;
+    try {
+      await getOnlineSession().updateMeta(room.roomCode, { pause: null });
+    } catch {
+      // The next host frame retries the transition.
+    } finally {
+      onlineTransitionPending = false;
+    }
+    return;
+  }
+  if (pause && pause.resumeAt === null && pause.ready[0] && pause.ready[1]) {
+    const scheduled = schedulePauseResume(pause, now);
+    onlineTransitionPending = true;
+    try {
+      await getOnlineSession().updateMeta(room.roomCode, { pause: scheduled });
+    } finally {
+      onlineTransitionPending = false;
+    }
+    return;
+  }
+  if (pause) return;
   const hostReady = Boolean(data.players?.[0]?.ready);
   const guestReady = Boolean(data.players?.[1]?.ready);
-  const now = onlineServerNow();
   const action = nextOnlineHostAction({
     phase: data.meta.phase ?? "lobby",
     bothReady: hostReady && guestReady,
@@ -598,7 +741,7 @@ async function driveOnlineRoundLifecycle(): Promise<void> {
     }
   } catch (error) {
     setOnlineStatus(
-      error instanceof Error ? error.message : "Unable to advance online round",
+      onlineErrorMessage(error),
       "error"
     );
   } finally {
@@ -620,6 +763,8 @@ async function leaveOnlineRoom(): Promise<void> {
   onlinePhase = null;
   onlinePreparedRound = -1;
   onlineTransitionPending = false;
+  wasOnlinePaused = false;
+  onlineState.hidden = true;
   exitOnlineRoom();
   if (room && session) {
     await session.leaveRoom(room.roomCode, room.playerId).catch(() => undefined);
@@ -638,6 +783,9 @@ function subscribeOnlineRoom(room: OnlineRoomHandle): void {
       return;
     }
     const roomData = snapshot as OnlineRoomData;
+    if (roomData.meta?.pause) {
+      roomData.meta.pause = normalizeOnlinePause(roomData.meta.pause);
+    }
     const hostReady = Boolean(roomData.players?.[0]?.ready);
     const guestReady = Boolean(roomData.players?.[1]?.ready);
     const guestPresent = Boolean(roomData.players?.[1]);
@@ -648,19 +796,20 @@ function subscribeOnlineRoom(room: OnlineRoomHandle): void {
     renderOnlineLobby(roomData, room.playerId);
     if (roomData.meta?.mode) onlineMode.value = roomData.meta.mode;
     if (phase === "lobby") {
-      if (previousPhase === "results") {
-        showOnlineScoreboard();
-      } else if (onlineGame || onlineRace) {
+      if (onlineGame || onlineRace) {
         showOnlineRoomLobby(room, roomData);
       }
       setOnlineStatus(
-        `Room ${room.roomCode} · ${guestPresent ? "2 players connected" : "waiting for guest"} · ` +
-        `${hostReady && guestReady ? "starting countdown" : "press Ready"}`,
+        t("online.room.lobby", {
+          code: room.roomCode,
+          players: t(guestPresent ? "online.room.players.connected" : "online.room.players.waiting"),
+          ready: t(hostReady && guestReady ? "online.room.ready.starting" : "online.room.ready.waiting")
+        }),
         hostReady && guestReady ? "success" : "neutral"
       );
     }
     if (phase === "ended" && onlineRoom?.roomCode === room.roomCode) {
-      setOnlineStatus("Room closed.");
+      setOnlineStatus(t("online.room.closed"));
       showTitle();
       return;
     }
@@ -674,17 +823,31 @@ function subscribeOnlineRoom(room: OnlineRoomHandle): void {
     }
     if (phase === "countdown") {
       prepareOnlineMode(room, roomData.meta ?? {});
-      setOnlineStatus(`Room ${room.roomCode} countdown`, "success");
+      setOnlineStatus(t("online.phase.countdown"), "success");
     }
     if (phase === "playing") {
       prepareOnlineMode(room, roomData.meta ?? {});
       if (previousPhase !== "playing") void audio.startMusic();
-      setOnlineStatus(`Room ${room.roomCode} playing`, "success");
+      setOnlineStatus(t("online.phase.playing"), "success");
     }
     if (phase === "results") {
       audio.stopMusic();
-      setOnlineStatus(`Room ${room.roomCode} results`, "success");
+      setOnlineStatus(t("online.phase.results"), "success");
+      if (previousPhase !== "results") {
+        void submitOnlineResult(room, roomData).catch(() => undefined);
+      }
     }
+    const onlinePausedNow = phase === "playing" && roomData.meta?.pause != null;
+    if (onlinePausedNow !== wasOnlinePaused) {
+      lastTime = performance.now();
+      accumulator = 0;
+      wasOnlinePaused = onlinePausedNow;
+      if (onlinePausedNow) void audio.suspend();
+      else void audio.resume();
+    }
+    pauseControl.hidden = phase !== "playing" || Boolean(onlinePausedNow) || Boolean(onlineRace);
+    racePause.hidden = phase !== "playing" || Boolean(onlinePausedNow) || !onlineRace;
+    renderOnlineStateDialog();
     void driveOnlineRoundLifecycle();
   });
   if (room.mode === "coop") {
@@ -717,6 +880,7 @@ function prepareOnlineMode(
   const round = meta.round ?? 0;
   if (onlinePreparedRound === round && (onlineGame || onlineRace)) return;
   onlinePreparedRound = round;
+  submittedOnlineRound = -1;
   if ((meta.mode ?? room.mode) === "race") {
     prepareOnlineRace(room, meta);
     return;
@@ -752,6 +916,7 @@ function prepareOnlineCoop(
   playerCount = 2;
   game = null;
   onlineRace = null;
+  wasOnlinePaused = false;
   scoreHandled = false;
   audio.configure(save.settings);
   closePanels();
@@ -761,8 +926,11 @@ function prepareOnlineCoop(
   title.hidden = true;
   pauseControl.hidden = false;
   abortControl.hidden = false;
-  setOnlineStatus(`Room ${room.roomCode} playing`);
+  gameFrame.append(onlineState);
+  onlineState.hidden = true;
+  setOnlineStatus(t("online.phase.playing"));
   renderer.render(onlineGame.snapshot());
+  void refreshWorldRecord("coop", onlineDifficulty);
 }
 
 function prepareOnlineRace(
@@ -784,6 +952,7 @@ function prepareOnlineRace(
   onlineGame = null;
   game = null;
   playerCount = 1;
+  wasOnlinePaused = false;
   scoreHandled = true;
   audio.configure(save.settings);
   closePanels();
@@ -791,58 +960,102 @@ function prepareOnlineRace(
   gameFrame.hidden = true;
   raceStage.hidden = false;
   cabinet.classList.add("race-active");
-  raceStatus.textContent = `ROOM ${room.roomCode} · SPLIT RACE`;
-  raceLocalLabel.textContent = `YOU · ${onlinePlayerName()}`;
+  raceLocalLabel.textContent = `1P · ${onlinePlayerName()}`;
   const opponentId = room.playerId === 0 ? 1 : 0;
-  raceRemoteLabel.textContent = `OPPONENT · ${onlineRoomData?.players?.[opponentId]?.name ?? "PLAYER"}`;
+  raceRemoteLabel.textContent = `2P · ${onlineRoomData?.players?.[opponentId]?.name ?? "PLAYER2"}`;
   const initial = onlineRace.localSnapshot();
   raceLocalRenderer.render(initial);
   raceRemoteRenderer.render(initial);
+  raceLocalPane.append(onlineState);
+  onlineState.hidden = true;
   updateFullscreenScale();
+  void refreshWorldRecord("race", meta.difficulty ?? save.settings.difficulty);
 }
 
-function drawCanvasOverlay(target: HTMLCanvasElement, titleText: string, detail: string): void {
-  const context = target.getContext("2d");
-  if (!context) return;
-  context.save();
-  context.fillStyle = "rgba(0, 0, 0, .72)";
-  context.fillRect(63, 211, 338, 58);
-  context.fillStyle = "#fff";
-  context.font = "16px monospace";
-  context.fillText(titleText, 133, 240);
-  context.font = "12px monospace";
-  context.fillText(detail, 133, 258);
-  context.restore();
+function showOnlineState(
+  titleText: string,
+  detail: string,
+  options: { pause?: OnlinePauseState; canLeave?: boolean } = {}
+): void {
+  onlineState.hidden = false;
+  onlineStateTitle.textContent = titleText;
+  onlineStateDetail.textContent = detail;
+  const pause = options.pause;
+  onlinePausePlayers.hidden = !pause || pause.resumeAt !== null;
+  for (const playerId of [0, 1] as const) {
+    const status = onlinePausePlayers.querySelector<HTMLElement>(`[data-pause-player="${playerId}"]`)!;
+    status.textContent = pause?.ready[playerId] ? t("online.ready") : t("online.waiting");
+    status.dataset.ready = String(Boolean(pause?.ready[playerId]));
+  }
+  onlineStateActions.hidden = !pause && !options.canLeave;
+  onlineStateReady.hidden = !pause || pause.resumeAt !== null;
+  onlineStateReady.disabled = Boolean(pause?.ready[onlineRoom?.playerId ?? 0]);
+  onlineStateLeave.hidden = !options.canLeave && !pause;
+}
+
+function localizedRaceResult(): string {
+  if (!onlineRace) return t("online.result.gameover");
+  const local = onlineRace.localSnapshot().floor;
+  const remote = onlineRace.remoteSnapshot()?.floor ?? 0;
+  const result = onlineRaceResult(local, remote);
+  return result === "YOU WIN" ? t("online.result.win") :
+    result === "YOU LOSE" ? t("online.result.lose") : t("online.result.draw");
+}
+
+function renderOnlineStateDialog(): void {
+  if (!onlineRoom) {
+    onlineState.hidden = true;
+    return;
+  }
+  const now = onlineServerNow();
+  const pause = onlineRoomData?.meta?.pause ?? null;
+  if (pause) {
+    if (pause.resumeAt !== null) {
+      const remaining = pause.resumeAt - now;
+      showOnlineState(
+        remaining <= 0 ? "GO!" : String(Math.max(1, Math.ceil(remaining / 1000))),
+        remaining <= 0 ? "" : t("online.pause.resume")
+      );
+    } else {
+      showOnlineState(t("online.pause.title"), t("online.pause.waiting"), {
+        pause,
+        canLeave: true
+      });
+    }
+    return;
+  }
+  const countdownEndsAt = onlineRoomData?.meta?.countdownEndsAt ?? undefined;
+  const countdown = countdownEndsAt === undefined ? null : onlineCountdownLabel(now, countdownEndsAt);
+  if ((onlinePhase === "countdown" || onlinePhase === "playing") && countdown) {
+    showOnlineState(countdown, countdown === "GO!" ? "" : t("online.phase.ready"));
+    return;
+  }
+  const raceStatus = onlineRace?.status();
+  const connection = onlineConnectionState(raceStatus?.remoteAgeMs ?? null, pause);
+  if (onlineRace && connection === "disconnected" && onlinePhase === "playing") {
+    showOnlineState(t("online.connection.lost"), t("online.connection.waiting"), {
+      canLeave: true
+    });
+    return;
+  }
+  if (onlinePhase === "results") {
+    if (onlineRace) {
+      const local = onlineRace.localSnapshot().floor;
+      const remote = onlineRace.remoteSnapshot()?.floor ?? 0;
+      showOnlineState(localizedRaceResult(), `1P ${local} / 2P ${remote}`);
+    } else if (onlineGame) {
+      showOnlineState(
+        t("online.result.gameover"),
+        t("online.result.floor", { floor: onlineGame.snapshot().floor })
+      );
+    }
+    return;
+  }
+  onlineState.hidden = true;
 }
 
 function drawOnlineRoundOverlay(): void {
-  const countdownEndsAt = onlineRoomData?.meta?.countdownEndsAt ?? undefined;
-  const label = countdownEndsAt === undefined
-    ? null : onlineCountdownLabel(onlineServerNow(), countdownEndsAt);
-  if ((onlinePhase === "countdown" || onlinePhase === "playing") && label) {
-    const detail = label === "GO!" ? "" : "GET READY";
-    if (onlineRace) {
-      drawCanvasOverlay(raceLocalCanvas, label, detail);
-      drawCanvasOverlay(raceRemoteCanvas, label, detail);
-    } else {
-      drawCanvasOverlay(canvas, label, detail);
-    }
-    raceStatus.textContent = label === "GO!" ? "GO!" : `START IN ${label}`;
-    return;
-  }
-  if (onlinePhase !== "results") return;
-  if (onlineRace) {
-    const local = onlineRace.localSnapshot();
-    const remote = onlineRace.remoteSnapshot();
-    const result = onlineRaceResult(local.floor, remote?.floor ?? 0);
-    const detail = `YOU ${local.floor} / OPPONENT ${remote?.floor ?? 0}`;
-    drawCanvasOverlay(raceLocalCanvas, result, detail);
-    drawCanvasOverlay(raceRemoteCanvas, result, detail);
-    raceStatus.textContent = `${result} · ${detail}`;
-  } else if (onlineGame) {
-    const floor = onlineGame.snapshot().floor;
-    drawCanvasOverlay(canvas, "GAME OVER", `Floor ${floor} · Returning to room`);
-  }
+  renderOnlineStateDialog();
 }
 
 function onlineDisplayText(): string | null {
@@ -866,37 +1079,15 @@ function onlineDisplayText(): string | null {
 function drawRaceStatus(): void {
   if (!onlineRace) return;
   const status = onlineRace.status();
-  const local = onlineRace.localSnapshot();
-  const remote = onlineRace.remoteSnapshot();
-  if (shouldShowRemoteWaiting(onlinePhase, status.remoteWaiting)) {
-    drawCanvasOverlay(raceRemoteCanvas, "WAITING OPPONENT", "Last snapshot unavailable");
-  }
-  if (status.localFinished && !status.remoteFinished) {
-    drawCanvasOverlay(raceLocalCanvas, "FINISHED", `Floor ${local.floor}`);
-  }
-  if (status.localFinished && status.remoteFinished && remote) {
-    const result = local.floor === remote.floor ? "DRAW" :
-      local.floor > remote.floor ? "YOU WIN" : "YOU LOSE";
-    raceStatus.textContent = `${result} · YOU ${local.floor} / OPPONENT ${remote.floor}`;
-  } else {
-    raceStatus.textContent = `YOU ${local.floor} · OPPONENT ${remote?.floor ?? "--"}`;
-  }
+  const connection = onlineConnectionState(status.remoteAgeMs, onlineRoomData?.meta?.pause ?? null);
+  const opponentId = onlineRoom?.playerId === 0 ? 1 : 0;
+  const name = onlineRoomData?.players?.[opponentId]?.name ?? "PLAYER2";
+  raceRemoteLabel.textContent = connection === "connected"
+    ? `2P · ${name}` : `2P · ${t("online.connection.syncing")}`;
 }
 
 function drawOnlineWaiting(): void {
-  const status = onlineGame?.status();
-  if (!status || status.phase !== "waiting") return;
-  const context = canvas.getContext("2d");
-  if (!context) return;
-  context.save();
-  context.fillStyle = "rgba(0, 0, 0, .65)";
-  context.fillRect(63, 211, 338, 58);
-  context.fillStyle = "#fff";
-  context.font = "16px monospace";
-  context.fillText("ONLINE WAITING", 153, 240);
-  context.font = "12px monospace";
-  context.fillText(`missing P${status.lockstep.missingPlayers.map((id) => id + 1).join(", P")}`, 153, 258);
-  context.restore();
+  renderOnlineStateDialog();
 }
 
 document.querySelectorAll<HTMLButtonElement>("[data-start]").forEach((button) => {
@@ -911,13 +1102,33 @@ document.querySelectorAll<HTMLButtonElement>("[data-open]").forEach((button) => 
       onlinePanel.hidden = false;
       onlineName.value = save.lastInputName;
       exitOnlineRoom();
-      setOnlineStatus("Create a room or join with a 4 digit code.");
+      setOnlineStatus(t("online.description"));
     }
     if (panel === "records") {
-      renderRecords();
       recordsPanel.hidden = false;
+      void renderRecords();
     }
     if (panel === "about") aboutPanel.hidden = false;
+  });
+});
+for (const input of [player1Name, player2Name, onlineName]) {
+  input.addEventListener("input", () => {
+    input.value = normalizePlayerName(input.value, "");
+  });
+}
+for (const [index, input] of [player1Name, player2Name].entries()) {
+  input.addEventListener("change", () => {
+    const fallback = index === 0 ? "PLAYER1" : "PLAYER2";
+    input.value = normalizePlayerName(input.value, fallback);
+    save.playerNames[index as 0 | 1] = input.value;
+    if (index === 0) save.lastInputName = input.value;
+    persist();
+  });
+}
+document.querySelectorAll<HTMLButtonElement>("[data-record-mode]").forEach((button) => {
+  button.addEventListener("click", () => {
+    selectedRecordMode = button.dataset.recordMode as LeaderboardMode;
+    void renderRecords();
   });
 });
 document.querySelectorAll<HTMLButtonElement>("[data-close]").forEach((button) => {
@@ -943,23 +1154,17 @@ difficulty.addEventListener("change", () => {
   syncRendererSettings();
   persist();
 });
-document.querySelector("#clear-records")!.addEventListener("click", () => {
-  save.records = { easy: [], normal: [], hard: [] };
-  syncRendererSettings();
-  persist();
-  renderRecords();
-});
 onlineCreate.addEventListener("click", async () => {
   try {
     const codeInput = onlineCode.value.trim();
     if (codeInput && !/^\d{4}$/.test(codeInput)) {
       onlineCode.classList.add("error");
-      setOnlineStatus("Room code must be 4 digits", "error");
+      setOnlineStatus(t("online.error.roomCode"), "error");
       return;
     }
     onlineCode.classList.remove("error");
     onlineCreate.disabled = true;
-    setOnlineStatus("Creating room...");
+    setOnlineStatus(t("online.room.creating"));
     const session = getOnlineSession();
     onlineServerOffsetMs = await session.getServerTimeOffset().catch(() => 0);
     const room = await session.createRoom({
@@ -976,6 +1181,8 @@ onlineCreate.addEventListener("click", async () => {
       roomCode: codeInput || undefined
     });
     onlineRoom = room;
+    save.lastInputName = onlinePlayerName();
+    persist();
     onlineCode.value = room.roomCode;
     enterOnlineRoom("host");
     renderOnlineLobby({
@@ -985,7 +1192,7 @@ onlineCreate.addEventListener("click", async () => {
     await copyCurrentRoomCode();
   } catch (error) {
     setOnlineStatus(
-      error instanceof Error ? error.message : "Unable to create online room",
+      onlineErrorMessage(error),
       "error"
     );
   } finally {
@@ -997,17 +1204,19 @@ onlineJoin.addEventListener("click", async () => {
     const validation = validateRoomCode(onlineCode.value);
     if (!validation.ok) throw new Error(validation.reason);
     onlineJoin.disabled = true;
-    setOnlineStatus("Joining room...");
+    setOnlineStatus(t("online.room.joining"));
     const session = getOnlineSession();
     onlineServerOffsetMs = await session.getServerTimeOffset().catch(() => 0);
     const room = await session.joinRoom(validation.code, onlinePlayerName());
     onlineRoom = room;
+    save.lastInputName = onlinePlayerName();
+    persist();
     enterOnlineRoom("guest");
     subscribeOnlineRoom(room);
-    setOnlineStatus(`Joined room ${room.roomCode}. Press Ready.`);
+    setOnlineStatus(t("online.room.joined", { code: room.roomCode }));
   } catch (error) {
     setOnlineStatus(
-      error instanceof Error ? error.message : "Unable to join online room",
+      onlineErrorMessage(error),
       "error"
     );
   } finally {
@@ -1021,15 +1230,12 @@ onlineReady.addEventListener("click", async () => {
     onlineReady.disabled = true;
     await getOnlineSession().setReady(onlineRoom.roomCode, onlineRoom.playerId, true);
     onlineReady.dataset.state = "ready";
-    onlineReady.textContent = "READY ✓";
-    setOnlineStatus(
-      `Room ${onlineRoom.roomCode} ready. Waiting for the other player.`,
-      "success"
-    );
+    onlineReady.textContent = `${t("online.ready")} ✓`;
+    setOnlineStatus(t("online.pause.waiting"), "success");
   } catch (error) {
     onlineReady.disabled = false;
     setOnlineStatus(
-      error instanceof Error ? error.message : "Unable to set ready",
+      onlineErrorMessage(error),
       "error"
     );
   }
@@ -1053,32 +1259,30 @@ abortControl.addEventListener("click", () => {
     showTitle();
   }
 });
-scoreboardLobby.addEventListener("click", () => {
-  scoreboardPanel.hidden = true;
-  if (onlineRoom && onlineRoomData) {
-    showOnlineRoomLobby(onlineRoom, onlineRoomData);
-  }
-});
 racePause.addEventListener("click", togglePause);
 raceAbort.addEventListener("click", () => {
   if (!onlineRace) return;
   audio.playEffect("abort");
   showTitle();
 });
-document.querySelector<HTMLFormElement>("#name-form")!.addEventListener("submit", (event) => {
-  event.preventDefault();
-  if (!game) return;
-  const input = document.querySelector<HTMLInputElement>("#player-name")!;
-  const name = input.value.trim().slice(0, 12) || "PLAYER";
-  const state = game.snapshot();
-  save.lastInputName = name;
-  save = recordScore(save, state.difficulty, { name, floor: state.floor });
-  syncRendererSettings();
-  persist();
+onlineStateReady.addEventListener("click", async () => {
+  const room = onlineRoom;
+  const pause = onlineRoomData?.meta?.pause;
+  if (!room || !pause) return;
+  onlineStateReady.disabled = true;
+  try {
+    await getOnlineSession().setPauseReady(room.roomCode, room.playerId, true);
+  } catch (error) {
+    onlineStateReady.disabled = false;
+    setOnlineStatus(onlineErrorMessage(error), "error");
+  }
+});
+onlineStateLeave.addEventListener("click", () => {
+  audio.playEffect("abort");
   showTitle();
 });
 window.addEventListener("keydown", (event) => {
-  if (event.code === "Enter" && game?.snapshot().mode === "gameover" && namePanel.hidden) showTitle();
+  if (event.code === "Enter" && game?.snapshot().mode === "gameover") showTitle();
   if (event.code === "KeyF") {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void (onlineRace ? raceStage : gameFrame).requestFullscreen();
@@ -1108,8 +1312,7 @@ window.render_game_to_text = () => JSON.stringify({
   coordinateSystem: "origin top-left; +x right; +y down; frame 634x436; playfield 420x356 at (22,62)",
   ui: !title.hidden ? "title" : !optionsPanel.hidden ? "options" :
     !recordsPanel.hidden ? "records" : !onlinePanel.hidden ? "online" :
-      !namePanel.hidden ? "name-entry" : !scoreboardPanel.hidden ? "scoreboard" :
-        onlineRace ? "race" : "game",
+      onlineRace ? "race" : "game",
   ...((game ?? onlineGame)?.snapshot() ?? onlineRace?.localSnapshot() ?? { mode: "title" }),
   online: onlineRoom ? {
     roomCode: onlineRoom.roomCode,
@@ -1118,8 +1321,13 @@ window.render_game_to_text = () => JSON.stringify({
     mode: onlineRoom.mode,
     phase: onlinePhase,
     round: onlineRoomData?.meta?.round ?? 0,
+    pause: onlineRoomData?.meta?.pause ?? null,
     display: onlineDisplayText(),
-    status: onlineGame?.status() ?? onlineRace?.status()
+    status: onlineGame?.status() ?? onlineRace?.status(),
+    dialog: onlineState.hidden ? null : {
+      title: onlineStateTitle.textContent,
+      detail: onlineStateDetail.textContent
+    }
   } : null,
   race: onlineRace ? {
     local: onlineRace.localSnapshot(),
@@ -1127,7 +1335,7 @@ window.render_game_to_text = () => JSON.stringify({
     status: onlineRace.status()
   } : null,
   settings: { ...save.settings },
-  audio: { music: save.settings.music, sound: save.settings.sound }
+  audio: { music: save.settings.music, sound: save.settings.sound, ...audio.status() }
 });
 window.advanceTime = (ms: number) => {
   const idle: InputFrame = {
@@ -1143,7 +1351,7 @@ if (qaMode) {
     setProgress: (floorSequence) => game?.debugSetProgress(floorSequence),
     startRace: () => {
       const room: OnlineRoomHandle = {
-        roomCode: "000000",
+        roomCode: "0000",
         role: "host",
         playerId: 0,
         mode: "race"
@@ -1173,9 +1381,18 @@ if (qaMode) {
       raceRemoteRenderer.render(onlineRace.remoteSnapshot()!);
       drawRaceStatus();
     },
-    setOnlineRoundPhase: (phase, endsInMs = 0) => {
+    setOnlineRoundPhase: async (phase, endsInMs = 0) => {
       if (!onlineRoom) return;
       const now = onlineServerNow();
+      if (onlineSession && unsubscribeOnlineRoom) {
+        await onlineSession.updateMeta(onlineRoom.roomCode, {
+          phase,
+          ...(phase === "countdown" || phase === "playing"
+            ? { countdownEndsAt: now + endsInMs } : {}),
+          resultsEndsAt: phase === "results" ? now + endsInMs : null
+        });
+        return;
+      }
       onlinePhase = phase;
       onlineRoomData ??= { players: {} };
       onlineRoomData.meta = {
@@ -1199,16 +1416,21 @@ if (qaMode) {
         }, 0);
       }
     },
+    setOnlinePause: (pause) => {
+      if (!onlineRoomData?.meta) return;
+      onlineRoomData.meta.pause = pause;
+      renderOnlineStateDialog();
+    },
     showOnlineLobby: (players, localPlayerId = 0) => {
       onlinePanel.hidden = false;
       title.hidden = true;
       onlineRoom = {
-        roomCode: "123456",
+        roomCode: "1234",
         role: localPlayerId === 0 ? "host" : "guest",
         playerId: localPlayerId,
         mode: "coop"
       };
-      onlineCode.value = "123456";
+      onlineCode.value = "1234";
       enterOnlineRoom(localPlayerId === 0 ? "host" : "guest");
       renderOnlineLobby({ players }, localPlayerId);
     }

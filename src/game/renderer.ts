@@ -95,7 +95,7 @@ export class Renderer {
     if (state.mode === "paused") {
       this.drawSprite(SPRITE_ATLAS.pause, (viewport.width - 128) / 2, 150);
     }
-    if (state.mode === "gameover" || state.mode === "name-entry") {
+    if (state.mode === "gameover") {
       this.drawSprite(SPRITE_ATLAS.gameOver, (viewport.width - 96) / 2, 168);
     }
     this.ctx.restore();

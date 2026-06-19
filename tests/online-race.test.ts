@@ -10,13 +10,14 @@ const idle: InputFrame = {
 describe("OnlineRaceController", () => {
   test("advances the local one-player game without a remote snapshot", () => {
     const sent: unknown[] = [];
+    let now = 1000;
     const controller = new OnlineRaceController({
       seed: 123,
       difficulty: "normal",
       playerId: 0,
       playerName: "HOST",
       snapshotIntervalTicks: 6,
-      now: () => 1000,
+      now: () => now,
       sendSnapshot: async (snapshot) => {
         sent.push(snapshot);
       }
@@ -27,7 +28,9 @@ describe("OnlineRaceController", () => {
     expect(controller.localSnapshot().ticks).toBeGreaterThan(0);
     expect(controller.localSnapshot().players).toHaveLength(1);
     expect(controller.remoteSnapshot()).toBeNull();
-    expect(controller.status().remoteWaiting).toBe(true);
+    expect(controller.status()).toMatchObject({ remoteAgeMs: 0, remoteWaiting: false });
+    now = 6000;
+    expect(controller.status()).toMatchObject({ remoteAgeMs: 5000, remoteWaiting: true });
   });
 
   test("publishes every configured interval and accepts opponent snapshots", () => {
@@ -68,7 +71,9 @@ describe("OnlineRaceController", () => {
       remoteFinished: false
     });
 
-    now = 2601;
+    now = 5999;
+    expect(controller.status().remoteWaiting).toBe(false);
+    now = 6000;
     expect(controller.status().remoteWaiting).toBe(true);
   });
 

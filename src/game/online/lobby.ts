@@ -12,17 +12,17 @@ export interface LobbyRoomData {
 
 export interface LobbyPlayerView {
   playerId: 0 | 1;
-  label: "P1 HOST" | "P2 GUEST";
+  label: "1P ホスト" | "2P ゲスト";
   name: string;
   status: LobbyPlayerStatus;
-  text: "WAITING" | "CONNECTED" | "READY";
+  text: "待機中" | "接続済み" | "準備完了";
 }
 
 export interface LobbyView {
   players: [LobbyPlayerView, LobbyPlayerView];
   readyButton: {
     state: "available" | "ready";
-    label: "Ready" | "READY ✓";
+    label: "準備完了" | "準備完了 ✓";
     disabled: boolean;
   };
 }
@@ -35,11 +35,11 @@ function playerView(playerId: 0 | 1, player?: LobbyPlayerData): LobbyPlayerView 
       : "waiting";
   return {
     playerId,
-    label: playerId === 0 ? "P1 HOST" : "P2 GUEST",
+    label: playerId === 0 ? "1P ホスト" : "2P ゲスト",
     name: player?.name ?? "---",
     status,
-    text: status === "ready" ? "READY" :
-      status === "connected" ? "CONNECTED" : "WAITING"
+    text: status === "ready" ? "準備完了" :
+      status === "connected" ? "接続済み" : "待機中"
   };
 }
 
@@ -55,7 +55,7 @@ export function buildLobbyView(
   return {
     players,
     readyButton: localReady
-      ? { state: "ready", label: "READY ✓", disabled: true }
-      : { state: "available", label: "Ready", disabled: false }
+      ? { state: "ready", label: "準備完了 ✓", disabled: true }
+      : { state: "available", label: "準備完了", disabled: false }
   };
 }

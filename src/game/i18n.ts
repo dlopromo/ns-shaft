@@ -1,0 +1,60 @@
+const JA = {
+  "online.title": "オンライン2P",
+  "online.description": "部屋を作るか、4桁のルームコードを入力してください。",
+  "online.mode.label": "モード",
+  "online.mode.coop": "協力プレイ",
+  "online.mode.race": "対戦プレイ",
+  "online.name": "名前",
+  "online.room.code": "ルームコード",
+  "online.room.create": "部屋を作る",
+  "online.room.join": "部屋に入る",
+  "online.room.copy": "コードをコピー",
+  "online.room.leave": "退室",
+  "online.back": "戻る",
+  "online.ready": "準備完了",
+  "online.waiting": "待機中",
+  "online.connected": "接続済み",
+  "online.room.created": "ルーム{code}を作成しました",
+  "online.room.copied": "ルーム{code}のコードをコピーしました。",
+  "online.room.joined": "ルーム{code}に入りました。準備完了を押してください。",
+  "online.room.lobby": "ルーム{code}・{players}・{ready}",
+  "online.room.players.waiting": "ゲストを待っています",
+  "online.room.players.connected": "2人接続済み",
+  "online.room.ready.waiting": "準備完了を押してください",
+  "online.room.ready.starting": "まもなく開始します",
+  "online.room.creating": "部屋を作っています…",
+  "online.room.joining": "部屋に接続しています…",
+  "online.room.closed": "部屋が閉じられました。",
+  "online.phase.countdown": "ゲーム開始",
+  "online.phase.playing": "プレイ中",
+  "online.phase.ready": "準備してください",
+  "online.phase.results": "結果",
+  "online.pause.title": "一時停止",
+  "online.pause.ready": "再開準備",
+  "online.pause.waiting": "相手の準備を待っています",
+  "online.pause.resume": "再開まで",
+  "online.connection.syncing": "通信中…",
+  "online.connection.lost": "通信が切断されました",
+  "online.connection.waiting": "再接続を待っています",
+  "online.result.win": "勝ち",
+  "online.result.lose": "負け",
+  "online.result.draw": "引き分け",
+  "online.result.gameover": "ゲームオーバー",
+  "online.result.floor": "地下{floor}階",
+  "online.error.roomCode": "ルームコードは4桁の数字で入力してください。",
+  "online.error.roomExists": "そのルームコードは使用されています。",
+  "online.error.roomMissing": "部屋が見つかりません。",
+  "online.error.roomFull": "部屋は満員です。",
+  "online.error.roomBusy": "この部屋はゲーム中です。",
+  "online.error.auth": "オンライン認証に失敗しました。",
+  "online.error.network": "通信に失敗しました。もう一度お試しください。"
+} as const;
+
+export type TranslationKey = keyof typeof JA;
+
+export function t(key: TranslationKey, values: Record<string, string | number> = {}): string {
+  return Object.entries(values).reduce(
+    (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+    JA[key] as string
+  );
+}

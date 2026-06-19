@@ -1,0 +1,45 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "ns-shaft": {
+      "rooms": {
+        ".indexOn": ["meta/createdAt"],
+        "$roomCode": {
+          ".read": "auth != null && $roomCode.matches(/^[0-9]{4}$/)",
+          ".write": "auth != null && $roomCode.matches(/^[0-9]{4}$/)"
+        }
+      },
+      "leaderboards": {
+        "$mode": {
+          "$difficulty": {
+            ".read": "auth != null && $mode.matches(/^(solo|local2p|coop|race)$/) && $difficulty.matches(/^(easy|normal|hard)$/)",
+            ".indexOn": ["floor"],
+            "$submissionId": {
+              ".write": "auth != null && !data.exists() && newData.child('uid').val() == auth.uid && $mode.matches(/^(solo|local2p|coop|race)$/) && $difficulty.matches(/^(easy|normal|hard)$/)",
+              ".validate": "newData.hasChildren(['uid', 'player1', 'floor', 'createdAt'])",
+              "uid": {
+                ".validate": "newData.isString() && newData.val() == auth.uid"
+              },
+              "player1": {
+                ".validate": "newData.isString() && newData.val().matches(/^[A-Z0-9]{1,8}$/)"
+              },
+              "player2": {
+                ".validate": "newData.isString() && newData.val().matches(/^[A-Z0-9]{1,8}$/)"
+              },
+              "floor": {
+                ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 9999 && newData.val() % 1 == 0"
+              },
+              "createdAt": {
+                ".validate": "newData.isNumber() && newData.val() == now"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

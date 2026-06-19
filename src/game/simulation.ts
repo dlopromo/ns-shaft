@@ -301,12 +301,13 @@ export class GameSimulation {
     }
 
     this.resolveCeiling(player);
-    if (player.y > HEIGHT + player.height) this.killPlayer(player);
+    if (player.y > HEIGHT) this.killPlayer(player);
   }
 
   private killPlayer(player: PlayerState): void {
     if (!player.alive) return;
     player.alive = false;
+    player.health = 0;
     player.pose = "dead";
     player.standingPlatformId = null;
     player.standingPlayerId = null;

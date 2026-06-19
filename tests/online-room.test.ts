@@ -6,18 +6,18 @@ import {
 } from "../src/game/online/room";
 
 describe("online room primitives", () => {
-  test("generates six digit room codes with leading zeroes", () => {
-    expect(generateRoomCode(() => 0)).toBe("000000");
-    expect(generateRoomCode(() => 0.000042)).toBe("000042");
-    expect(generateRoomCode(() => 0.999999)).toBe("999999");
-    expect(generateRoomCode(() => 1)).toBe("999999");
+  test("generates four digit room codes with leading zeroes", () => {
+    expect(generateRoomCode(() => 0)).toBe("0000");
+    expect(generateRoomCode(() => 0.0042)).toBe("0042");
+    expect(generateRoomCode(() => 0.9999)).toBe("9999");
+    expect(generateRoomCode(() => 1)).toBe("9999");
   });
 
-  test("accepts only six numeric digits as room codes", () => {
-    expect(validateRoomCode("042917")).toEqual({ ok: true, code: "042917" });
-    expect(validateRoomCode(" 042917 ")).toEqual({ ok: true, code: "042917" });
-    expect(validateRoomCode("42917")).toEqual({ ok: false, reason: "Room code must be 6 digits" });
-    expect(validateRoomCode("04291A")).toEqual({ ok: false, reason: "Room code must be 6 digits" });
+  test("accepts only four numeric digits as room codes", () => {
+    expect(validateRoomCode("0429")).toEqual({ ok: true, code: "0429" });
+    expect(validateRoomCode(" 0429 ")).toEqual({ ok: true, code: "0429" });
+    expect(validateRoomCode("429")).toEqual({ ok: false, reason: "Room code must be 4 digits" });
+    expect(validateRoomCode("042A")).toEqual({ ok: false, reason: "Room code must be 4 digits" });
   });
 
   test("builds firebase config from Vite environment values", () => {

@@ -4,6 +4,7 @@ export interface FirebaseConfig {
   databaseURL: string;
   projectId: string;
   appId: string;
+  useEmulator?: boolean;
 }
 
 type Env = Record<string, string | undefined>;
@@ -38,6 +39,7 @@ export function buildFirebaseConfig(env: Env): FirebaseConfig {
     authDomain: env.VITE_FIREBASE_AUTH_DOMAIN!,
     databaseURL: env.VITE_FIREBASE_DATABASE_URL!,
     projectId: env.VITE_FIREBASE_PROJECT_ID!,
-    appId: env.VITE_FIREBASE_APP_ID!
+    appId: env.VITE_FIREBASE_APP_ID!,
+    ...(env.VITE_FIREBASE_EMULATOR === "1" ? { useEmulator: true } : {})
   };
 }

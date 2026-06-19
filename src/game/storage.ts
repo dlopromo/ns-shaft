@@ -1,10 +1,11 @@
-import type { Difficulty, SaveData, ScoreEntry } from "./types";
+import type { SaveData } from "./types";
+import { normalizePlayerName } from "./player-name";
 
 export const SAVE_KEY = "ns-shaft-browser-save-v1";
 
 export function createDefaultSave(): SaveData {
   return {
-    version: 1,
+    version: 2,
     settings: {
       difficulty: "normal",
       music: true,
@@ -14,36 +15,34 @@ export function createDefaultSave(): SaveData {
       spring: true,
       rotating: true
     },
-    records: { easy: [], normal: [], hard: [] },
-    lastInputName: "PLAYER"
+    lastInputName: "PLAYER1",
+    playerNames: ["PLAYER1", "PLAYER2"]
   };
 }
 
 export function loadSave(raw: string | null): SaveData {
   if (!raw) return createDefaultSave();
   try {
-    const parsed = JSON.parse(raw) as Partial<SaveData>;
-    if (parsed.version !== 1 || !parsed.settings || !parsed.records) return createDefaultSave();
+    const parsed = JSON.parse(raw) as Omit<Partial<SaveData>, "version" | "playerNames"> & {
+      version?: number;
+      playerNames?: unknown[];
+    };
+    if ((parsed.version !== 1 && parsed.version !== 2) || !parsed.settings) {
+      return createDefaultSave();
+    }
     const defaults = createDefaultSave();
+    const names = Array.isArray(parsed.playerNames) ? parsed.playerNames : [parsed.lastInputName, undefined];
     return {
       ...defaults,
-      ...parsed,
+      version: 2,
       settings: { ...defaults.settings, ...parsed.settings },
-      records: { ...defaults.records, ...parsed.records }
+      lastInputName: normalizePlayerName(String(parsed.lastInputName ?? names[0] ?? ""), "PLAYER1"),
+      playerNames: [
+        normalizePlayerName(String(names[0] ?? ""), "PLAYER1"),
+        normalizePlayerName(String(names[1] ?? ""), "PLAYER2")
+      ]
     } as SaveData;
   } catch {
     return createDefaultSave();
   }
-}
-
-export function recordScore(save: SaveData, difficulty: Difficulty, entry: ScoreEntry): SaveData {
-  const records = {
-    easy: [...save.records.easy],
-    normal: [...save.records.normal],
-    hard: [...save.records.hard]
-  };
-  records[difficulty] = [...records[difficulty], entry]
-    .sort((a, b) => b.floor - a.floor)
-    .slice(0, 5);
-  return { ...save, records };
 }

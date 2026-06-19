@@ -68,11 +68,11 @@ if (titlePanelSpacing.top < 12 || titlePanelSpacing.top > 45 ||
   throw new Error(`Title panel spacing is unbalanced: ${JSON.stringify(titlePanelSpacing)}`);
 }
 
-await page.getByRole("button", { name: "ONLINE 2P" }).click();
+await page.getByRole("button", { name: "オンライン2P" }).click();
 state = await capture("01b-online-panel");
 if (state.ui !== "online") throw new Error(`Online panel failed: ${state.ui}`);
 const onlineModes = await page.locator("#online-mode option").allTextContents();
-if (JSON.stringify(onlineModes) !== JSON.stringify(["Co-op 2P", "Split Race"])) {
+if (JSON.stringify(onlineModes) !== JSON.stringify(["協力プレイ", "対戦プレイ"])) {
   throw new Error(`Online modes are incomplete: ${JSON.stringify(onlineModes)}`);
 }
 await page.evaluate(() => window.__nsShaftQa.showOnlineLobby({
@@ -100,13 +100,13 @@ const lobbyAudit = await page.evaluate(() => {
       dialog.getBoundingClientRect().bottom <= screen.getBoundingClientRect().bottom
   };
 });
-if (lobbyAudit.hostStatus !== "ready" || lobbyAudit.hostText !== "READY" ||
+if (lobbyAudit.hostStatus !== "ready" || lobbyAudit.hostText !== "準備完了" ||
     lobbyAudit.hostBackground !== "rgb(156, 227, 165)" ||
-    lobbyAudit.guestStatus !== "connected" || lobbyAudit.guestText !== "CONNECTED" ||
+    lobbyAudit.guestStatus !== "connected" || lobbyAudit.guestText !== "接続済み" ||
     lobbyAudit.guestBackground !== "rgb(255, 226, 138)" ||
     lobbyAudit.readyState !== "available" || lobbyAudit.readyDisabled ||
     lobbyAudit.readyBackground !== "rgb(255, 226, 138)" ||
-    lobbyAudit.copyDisabled || !lobbyAudit.dialogContained) {
+    !lobbyAudit.copyDisabled || !lobbyAudit.dialogContained) {
   throw new Error(`Online lobby styling failed: ${JSON.stringify(lobbyAudit)}`);
 }
 await capture("01c-online-lobby-ready");
@@ -115,6 +115,10 @@ await page.getByRole("button", { name: "戻る" }).click();
 await page.getByRole("button", { name: "オプション" }).click();
 await page.locator("#difficulty").selectOption("hard");
 await page.locator("#conveyor").check();
+await page.locator("#player1-name").fill("alice!?long");
+if (await page.locator("#player1-name").inputValue() !== "ALICELON") {
+  throw new Error("Player name was not normalized to eight uppercase alphanumerics");
+}
 await capture("02-options");
 const soundPreviewRows = await page.locator("[data-sound-preview]").evaluateAll((buttons) =>
   buttons.map((button) => ({
@@ -134,6 +138,11 @@ if (soundPreviewRows.length !== 10 ||
 await page.locator('[data-sound-preview="rotate"]').click();
 await page.waitForTimeout(50);
 await page.getByRole("button", { name: "戻る" }).click();
+await page.getByRole("button", { name: "オプション" }).click();
+if (await page.locator("#player1-name").inputValue() !== "ALICELON") {
+  throw new Error("Player name was not retained in localStorage");
+}
+await page.getByRole("button", { name: "戻る" }).click();
 
 await page.getByRole("button", { name: "ベスト５" }).click();
 state = await capture("03-records");
@@ -145,6 +154,10 @@ await page.waitForTimeout(150);
 state = await capture("04-gameplay-initial");
 if (state.mode !== "playing" || state.players.length !== 1) {
   throw new Error(`1P start failed: ${JSON.stringify(state)}`);
+}
+if (!state.audio.midiLoaded || !state.audio.musicActive ||
+    state.audio.contextState !== "running" || Math.abs(state.audio.musicGain - 0.1) > 0.001) {
+  throw new Error(`MIDI BGM did not start audibly: ${JSON.stringify(state.audio)}`);
 }
 const nativePixelAudit = await page.locator("#game").evaluate((canvas) => {
   const context = canvas.getContext("2d");
@@ -428,11 +441,17 @@ if (state.players[0].standingPlatformId !== null || state.players[0].vy >= 0) {
 await page.getByRole("button", { name: "暫停" }).click();
 await page.waitForTimeout(40);
 state = await capture("06-paused");
-if (state.mode !== "paused") throw new Error(`Pause failed: ${state.mode}`);
+if (state.mode !== "paused" || state.audio.contextState !== "suspended" ||
+    !state.audio.musicActive) {
+  throw new Error(`Pause failed: ${JSON.stringify({ mode: state.mode, audio: state.audio })}`);
+}
 await page.getByRole("button", { name: "暫停" }).click();
 await page.waitForTimeout(40);
 state = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
-if (state.mode !== "playing") throw new Error(`Resume failed: ${state.mode}`);
+if (state.mode !== "playing" || state.audio.contextState !== "running" ||
+    !state.audio.musicActive) {
+  throw new Error(`Resume failed: ${JSON.stringify({ mode: state.mode, audio: state.audio })}`);
+}
 
 await page.evaluate(() => window.dispatchEvent(new Event("blur")));
 state = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
@@ -444,20 +463,13 @@ await page.evaluate(() => {
   window.__nsShaftQa.setPlayer(0, { alive: false, health: 0 });
   window.advanceTime(20);
 });
-state = await capture("07-name-entry");
-if (state.ui !== "name-entry") throw new Error(`Name entry failed: ${state.ui}`);
-await page.locator("#player-name").fill("CODEX");
-await page.getByRole("button", { name: "登録" }).click();
+state = await capture("07-game-over");
+if (state.mode !== "gameover") throw new Error(`Game over failed: ${state.mode}`);
+await page.keyboard.press("Enter");
 
 await page.getByRole("button", { name: "ベスト５" }).click();
-if (!(await page.locator("#records-list").innerText()).includes("CODEX")) {
-  throw new Error("Recorded score was not shown in Best 5");
-}
-await capture("08-record-saved");
-await page.getByRole("button", { name: "記録消去" }).click();
-if ((await page.locator("#records-list").innerText()).includes("CODEX")) {
-  throw new Error("Clear records did not remove the saved score");
-}
+await page.waitForFunction(() => document.querySelectorAll("#records-list section").length === 3);
+await capture("08-global-records");
 await page.getByRole("button", { name: "戻る" }).click();
 
 await page.getByRole("button", { name: "２人プレイ" }).click();
@@ -648,6 +660,34 @@ state = await capture("13-online-split-race");
 if (state.ui !== "race" || state.race?.local?.players?.length !== 1) {
   throw new Error(`Split race did not start: ${JSON.stringify(state)}`);
 }
+await page.evaluate(() => window.__nsShaftQa.setOnlinePause({
+  requestedBy: 0,
+  ready: { 0: true, 1: false },
+  resumeAt: null
+}));
+state = await capture("13aa-online-pause-ready");
+const pauseDialog = await page.locator("#online-state").evaluate((dialog) => ({
+  visible: !dialog.hidden,
+  title: dialog.querySelector("#online-state-title")?.textContent,
+  player1: dialog.querySelector('[data-pause-player="0"]')?.textContent,
+  player2: dialog.querySelector('[data-pause-player="1"]')?.textContent,
+  readyDisabled: dialog.querySelector("#online-state-ready")?.disabled
+}));
+if (!pauseDialog.visible || pauseDialog.title !== "一時停止" ||
+    pauseDialog.player1 !== "準備完了" || pauseDialog.player2 !== "待機中" ||
+    !pauseDialog.readyDisabled) {
+  throw new Error(`Online pause dialog is invalid: ${JSON.stringify(pauseDialog)}`);
+}
+await page.evaluate(() => window.__nsShaftQa.setOnlinePause({
+  requestedBy: 0,
+  ready: { 0: true, 1: true },
+  resumeAt: Date.now() + 3000
+}));
+state = await capture("13ab-online-resume-countdown");
+if (state.online?.dialog?.title !== "3") {
+  throw new Error(`Online resume countdown is invalid: ${JSON.stringify(state.online?.dialog)}`);
+}
+await page.evaluate(() => window.__nsShaftQa.setOnlinePause(null));
 const raceGeometry = await page.locator(".race-pane").evaluateAll((panes) =>
   panes.map((pane) => {
     const canvas = pane.querySelector("canvas");

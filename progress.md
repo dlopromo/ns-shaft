@@ -20,8 +20,8 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   supplied MIDI for Web Audio playback.
 - Replaced temporary Canvas art with the original sprite atlas and converted
   paletted BMP resources losslessly to browser-stable PNG files.
-- Added title, options, records, about, name-entry and local two-player flows.
-- Browser QA now requires a complete Game Over -> name entry -> Best 5 record
+- Added title, options, records, about and local two-player flows.
+- Browser QA now verifies natural Game Over without the retired local name-entry flow
   round trip before testing two-player mode.
 - Rebuilt player sprites into a transparent 26x26 atlas with explicit foot
   anchors and collision boxes; left-facing animation now mirrors the same frame.
@@ -149,7 +149,7 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   spring launches from landing on any platform above the launch point until the
   player falls back below that launch height.
 - Added the first Online 2P implementation: Firebase Realtime Database rooms,
-  anonymous six-digit numeric room codes, local `.env.local` configuration,
+  anonymous four-digit numeric room codes, local `.env.local` configuration,
   host/guest ready flow, deterministic two-player lockstep input buffering and
   browser QA coverage for missing Firebase configuration.
 - Added Online Split Race as the second WAN mode. Both players run independent
@@ -181,6 +181,22 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   first finisher watch until the opponent also finishes.
 - Made ONLINE 2P span both title-menu columns and extended browser/Firebase QA
   through countdown freeze, live play, result display and round-two Ready flow.
+- Added centralized Online Pause for Co-op and Split Race. Either player may
+  pause; both must mark resume-ready before a server-time three-second countdown.
+  Simulation, input, snapshots and MIDI BGM remain suspended throughout.
+- Replaced Online Canvas overlays with solid Windows-style Japanese HTML dialogs,
+  added five-second Split Race disconnect handling, and retained the last remote
+  snapshot until communication recovers or the player leaves.
+- Added Firebase global Best 5 for solo, local 2P, Co-op and Race under the
+  `/ns-shaft` namespace. Submissions are append-only, use stable UUID retry
+  records in localStorage, and only occur after natural Game Over.
+- Added saved uppercase 8-character player names, Anonymous Auth, namespaced
+  database rules, a rules-emulator suite, and audible MIDI gain/browser probes.
+- Added an Auth + Realtime Database emulator browser suite covering real
+  two-client Co-op and Split Race rooms. Fixed Firebase's omission of null
+  `pause.resumeAt` fields at the snapshot boundary, then verified both modes
+  against the published production rules through countdown, synchronized
+  pause/resume, results and same-room rematch.
 
 ## Remaining
 
