@@ -145,9 +145,10 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   gameplay blockers, changed the unloaded background fallback from black to
   blue, and moved the ceiling spike strip into the transparent native sprite
   sheet so the top spikes do not carry a black background.
-- Restored the previous spring launch timing and strength while preventing
-  spring launches from landing on any platform above the launch point until the
-  player falls back below that launch height.
+- Restored the previous spring launch timing and strength. Each launch now
+  freezes the source spring and every platform above it into an ignored ID set;
+  the next lower platform remains landable even after screen scrolling moves it
+  above the spring's former screen position.
 - Added the first Online 2P implementation: Firebase Realtime Database rooms,
   anonymous four-digit numeric room codes, local `.env.local` configuration,
   host/guest ready flow, deterministic two-player lockstep input buffering and
@@ -219,10 +220,43 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
   traffic and continuously false presence for 15 seconds. Co-op input/status
   packets, guest checkpoints and Race snapshots all restore health
   immediately, while lobby, countdown, pause and results suppress warnings.
+- Timed every spring launch from the individual player's landing. Each player
+  now keeps an independent 100ms launch schedule even after walking off, while
+  the spring completes its 100ms rebound animation.
+- Rotating floors now hold for 100ms and complete their six-frame turn in
+  250ms before restoring collision. Relative swept landing chooses the first
+  crossed platform, including at Fast Mode speed.
+- Added asymmetric conveyor control (0.35px/ms with the belt, 0.15px/ms
+  against it) and prevent any exact platform variant from generating three
+  rows in succession without changing difficulty weights.
+- Spring descent now ignores the source spring plus all blocks above it at the
+  instant of launch. Blocks below at launch remain landable throughout scroll,
+  and landing clears the frozen ID set.
+- The source spring is ignored only while the player rises. On descent it can
+  catch the player again, start a fresh 100ms compression, and repeat without
+  weakening the frozen ignore rule for other blocks above the launch point.
+- Online Pause derives required Ready players from current Co-op or Race alive
+  state. Eliminated players display Game Over and no longer block resume.
+- Added one-second Split Race heartbeat snapshots and only count accepted
+  current-round opponent sequences as connection activity, preventing a
+  finished or motionless player from causing a false long-term sync warning.
+- Added saved Japanese, Traditional Chinese and English HTML UI locales while
+  preserving all original bitmap text and native asset dimensions.
+- Moved locale selection onto the title menu for immediate switching. New
+  saves detect the first supported browser language and otherwise fall back to
+  Japanese; an existing saved locale remains authoritative.
+- Reflowed the native title menu into a 360x330 Windows panel with its original
+  288x140 art unchanged and a 120x22 language selector in the top-right tool
+  row. The six menu buttons remain aligned below it at native 634x436 size.
+- Moved the ten-sound preview list into its own Windows-style dialog so the
+  Options panel remains fully visible at the native 634x436 cabinet size.
+- Expanded Online Co-op and Split Race results with a server-time five-second
+  return countdown, room placement/shared result, and the current submission's
+  global Best 5 rank identified by its Firebase submission ID.
 
 ## Remaining
 
 - Measure provisional physics constants in original-system emulation.
 - Compare provisional animation timing against original-system frame capture.
-- Re-check spring and rotating timing against original video after the faster
-  feel adjustment.
+- Re-check spring and rotating timing against original video after the current
+  `100ms spring / 100ms + 250ms rotating` playability adjustment.

@@ -31,6 +31,27 @@ describe("GameSimulation gameplay rules", () => {
     expect(restored.snapshot()).toEqual(first.snapshot());
   });
 
+  test("normalizes legacy spring collision fields when applying a checkpoint", () => {
+    const source = new GameSimulation({ seed: 2027, difficulty: "normal", players: 1 });
+    const checkpoint = source.exportCheckpoint();
+    const legacyPlayer = checkpoint.state.players[0] as unknown as Record<string, unknown>;
+    delete legacyPlayer.springIgnoredPlatformIds;
+    delete legacyPlayer.springSourcePlatformId;
+    legacyPlayer.springIgnoreAboveY = 200;
+    legacyPlayer.springIgnorePlatformId = 4;
+    legacyPlayer.springLaunchY = 200;
+
+    const restored = new GameSimulation({ seed: 1, difficulty: "easy", players: 1 });
+    restored.applyCheckpoint(checkpoint);
+
+    const player = restored.snapshot().players[0];
+    expect(player.springIgnoredPlatformIds).toEqual([]);
+    expect(player.springSourcePlatformId).toBeNull();
+    expect(player).not.toHaveProperty("springIgnoreAboveY");
+    expect(player).not.toHaveProperty("springIgnorePlatformId");
+    expect(player).not.toHaveProperty("springLaunchY");
+  });
+
   test("starts above a centered normal floor with a queued floor below the viewport", () => {
     const game = new GameSimulation({ seed: 21, difficulty: "normal", players: 2 });
     const state = game.snapshot();

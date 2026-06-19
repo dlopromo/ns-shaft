@@ -5,7 +5,7 @@ import type { GameStateSnapshot, PlatformState, PlayerState } from "./types";
 
 export const LOGICAL_WIDTH = GAME_LAYOUT.frame.width;
 export const LOGICAL_HEIGHT = GAME_LAYOUT.frame.height;
-const SPRING_LAUNCH_MS = IPEL_PHYSICS.springCompressionMs * 2;
+const SPRING_LAUNCH_MS = IPEL_PHYSICS.springCompressionMs;
 const SPRING_REBOUND_MS = IPEL_PHYSICS.springCompressionMs;
 const ROTATING_HOLD_MS = IPEL_PHYSICS.disappearingHoldMs;
 const ROTATING_TURN_MS = IPEL_PHYSICS.disappearingTurnMs;

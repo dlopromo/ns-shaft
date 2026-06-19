@@ -23,7 +23,13 @@ export function markPauseReady(pause: OnlinePauseState, playerId: 0 | 1): Online
   return { ...pause, ready: { ...pause.ready, [playerId]: true } };
 }
 
-export function schedulePauseResume(pause: OnlinePauseState, now: number): OnlinePauseState {
-  if (!pause || pause.resumeAt !== null || !pause.ready[0] || !pause.ready[1]) return pause;
+export function schedulePauseResume(
+  pause: OnlinePauseState,
+  now: number,
+  required: Record<0 | 1, boolean> = { 0: true, 1: true }
+): OnlinePauseState {
+  if (!pause || pause.resumeAt !== null ||
+      (required[0] && !pause.ready[0]) ||
+      (required[1] && !pause.ready[1])) return pause;
   return { ...pause, resumeAt: now + ONLINE_RESUME_COUNTDOWN_MS };
 }

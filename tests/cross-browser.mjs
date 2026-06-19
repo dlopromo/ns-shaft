@@ -7,7 +7,7 @@ const report = [];
 
 for (const [name, browserType] of Object.entries({ chromium, firefox, webkit })) {
   const browser = await browserType.launch({ headless: true });
-  const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
+  const page = await browser.newPage({ viewport: { width: 900, height: 700 }, locale: "ja-JP" });
   const errors = [];
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());

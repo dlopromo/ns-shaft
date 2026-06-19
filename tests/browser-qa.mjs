@@ -4,7 +4,7 @@ import { cp, mkdir, writeFile } from "node:fs/promises";
 const output = new URL("../artifacts/qa/current/", import.meta.url);
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
+const page = await browser.newPage({ viewport: { width: 900, height: 700 }, locale: "ja-JP" });
 const errors = [];
 const captures = [];
 let state;
@@ -55,16 +55,25 @@ const titlePanelSpacing = await page.evaluate(() => {
   const title = document.querySelector(".title-screen");
   const art = document.querySelector(".title-art").getBoundingClientRect();
   const about = document.querySelector('[data-open="about"]').getBoundingClientRect();
+  const languageElement = document.querySelector(".title-language");
+  const language = languageElement.getBoundingClientRect();
   const panelHeight = Number.parseFloat(getComputedStyle(title, "::before").height);
   const panelTop = frame.top + (frame.height - panelHeight) / 2;
   const panelBottom = panelTop + panelHeight;
   return {
     top: Math.round(art.top - panelTop),
+    languageTop: Math.round(language.top - panelTop),
+    languageWidth: Math.round(languageElement.querySelector("select").getBoundingClientRect().width),
+    languageArtGap: Math.round(art.top - language.bottom),
+    artMenuGap: Math.round(document.querySelector(".main-menu").getBoundingClientRect().top - art.bottom),
     bottom: Math.round(panelBottom - about.bottom)
   };
 });
 if (titlePanelSpacing.top < 12 || titlePanelSpacing.top > 45 ||
-    titlePanelSpacing.bottom < 12 || titlePanelSpacing.bottom > 30) {
+    titlePanelSpacing.languageTop < 6 || titlePanelSpacing.languageTop > 14 ||
+    titlePanelSpacing.languageWidth < 120 || titlePanelSpacing.languageArtGap < 2 ||
+    titlePanelSpacing.artMenuGap < 4 || titlePanelSpacing.bottom < 10 ||
+    titlePanelSpacing.bottom > 30) {
   throw new Error(`Title panel spacing is unbalanced: ${JSON.stringify(titlePanelSpacing)}`);
 }
 
@@ -112,6 +121,23 @@ if (lobbyAudit.hostStatus !== "ready" || lobbyAudit.hostText !== "準備完了" 
 await capture("01c-online-lobby-ready");
 await page.getByRole("button", { name: "戻る" }).click();
 
+await page.locator("#locale").selectOption("zh-Hant");
+if (await page.getByRole("button", { name: "選項" }).count() !== 1 ||
+    JSON.parse(await page.evaluate(() => window.render_game_to_text())).settings.locale !== "zh-Hant") {
+  throw new Error("Traditional Chinese did not apply immediately");
+}
+await capture("02a-title-zh-hant");
+await page.locator("#locale").selectOption("en");
+if (await page.getByRole("button", { name: "OPTIONS" }).count() !== 1) {
+  throw new Error("English did not apply immediately");
+}
+await capture("02b-title-en");
+await page.reload({ waitUntil: "networkidle" });
+if (await page.getByRole("button", { name: "OPTIONS" }).count() !== 1 ||
+    JSON.parse(await page.evaluate(() => window.render_game_to_text())).settings.locale !== "en") {
+  throw new Error("English locale was not persisted across reload");
+}
+await page.locator("#locale").selectOption("ja");
 await page.getByRole("button", { name: "オプション" }).click();
 await page.locator("#difficulty").selectOption("hard");
 await page.locator("#conveyor").check();
@@ -120,6 +146,14 @@ if (await page.locator("#player1-name").inputValue() !== "ALICELON") {
   throw new Error("Player name was not normalized to eight uppercase alphanumerics");
 }
 await capture("02-options");
+const optionsContained = await page.locator("#options-panel .dialog").evaluate((dialog) => {
+  const panel = document.querySelector("#options-panel").getBoundingClientRect();
+  const rect = dialog.getBoundingClientRect();
+  return rect.top >= panel.top && rect.bottom <= panel.bottom && rect.height < 340;
+});
+if (!optionsContained) throw new Error("Options dialog overflowed its panel");
+await page.getByRole("button", { name: "効果音テスト" }).click();
+await capture("02c-sound-test");
 const soundPreviewRows = await page.locator("[data-sound-preview]").evaluateAll((buttons) =>
   buttons.map((button) => ({
     event: button.getAttribute("data-sound-preview"),
@@ -138,7 +172,6 @@ if (soundPreviewRows.length !== 10 ||
 await page.locator('[data-sound-preview="rotate"]').click();
 await page.waitForTimeout(50);
 await page.getByRole("button", { name: "戻る" }).click();
-await page.getByRole("button", { name: "オプション" }).click();
 if (await page.locator("#player1-name").inputValue() !== "ALICELON") {
   throw new Error("Player name was not retained in localStorage");
 }
@@ -207,7 +240,7 @@ await page.evaluate(() => {
       direction: -1, phase: 0, collidable: true, activationState: "active" },
     { id: 3, x: 244, y: 200, width: 96, kind: "rotating", variant: "disappearing",
       direction: 1, phase: 0, collidable: true, activationState: "disappearing",
-      activationAgeMs: 350, height: 6 },
+      activationAgeMs: 190, height: 6 },
     { id: 4, x: 80, y: 260, width: 96, kind: "spring", variant: "spring",
       direction: 1, phase: 0, collidable: true, activationState: "triggered",
       activationAgeMs: 120 },
@@ -367,7 +400,7 @@ await page.evaluate(() => {
     {
       id: 21, x: 80, y: 260, width: 96, kind: "rotating",
       variant: "disappearing", direction: 1, phase: 0, collidable: true,
-      activationState: "triggered", activationAgeMs: 130, height: 12
+      activationState: "triggered", activationAgeMs: 90, height: 12
     },
     {
       id: 24, x: 80, y: 350, width: 96, kind: "normal",
@@ -385,7 +418,7 @@ state = await capture("05dc-rotating-delay-ended");
 if (state.players[0].standingPlatformId !== null ||
     state.platforms[0].collidable ||
     state.platforms[0].activationState !== "disappearing") {
-  throw new Error(`Rotating block did not drop after 150ms: ${JSON.stringify(state)}`);
+  throw new Error(`Rotating block did not drop after 100ms: ${JSON.stringify(state)}`);
 }
 
 await page.evaluate(() => {
@@ -393,7 +426,7 @@ await page.evaluate(() => {
     {
       id: 21, x: 80, y: 220, width: 96, kind: "rotating",
       variant: "disappearing", direction: 1, phase: 0, collidable: false,
-      activationState: "disappearing", activationAgeMs: 360, height: 0
+      activationState: "disappearing", activationAgeMs: 330, height: 0
     },
     {
       id: 24, x: 80, y: 350, width: 96, kind: "normal",
@@ -404,13 +437,13 @@ await page.evaluate(() => {
   window.advanceTime(1);
 });
 state = await capture("05dd-rotating-last-frame");
-if (state.platforms[0].activationAgeMs < 360 ||
-    state.platforms[0].activationAgeMs >= 390 ||
+if (state.platforms[0].activationAgeMs < 330 ||
+    state.platforms[0].activationAgeMs >= 350 ||
     state.platforms[0].activationState !== "disappearing") {
   throw new Error(`Rotating block skipped its last frame: ${JSON.stringify(state.platforms[0])}`);
 }
 
-await page.evaluate(() => window.advanceTime(60));
+await page.evaluate(() => window.advanceTime(40));
 state = await capture("05de-rotating-reset");
 if (!state.platforms[0].collidable ||
     state.platforms[0].activationState !== "active" ||
@@ -426,7 +459,8 @@ await page.evaluate(() => {
   }]);
   window.__nsShaftQa.setPlayer(0, {
     x: 128, y: 260, vx: 0, vy: 0, pose: "stand",
-    standingPlatformId: 23
+    standingPlatformId: 23,
+    onPlatformSince: JSON.parse(window.render_game_to_text()).timeMs
   });
   window.advanceTime(145);
 });
@@ -438,14 +472,72 @@ if (state.players[0].standingPlatformId !== null || state.players[0].vy >= 0) {
   throw new Error(`Spring did not launch player: ${JSON.stringify(state.players[0])}`);
 }
 
-await page.getByRole("button", { name: "暫停" }).click();
+await page.evaluate(() => {
+  const timeMs = JSON.parse(window.render_game_to_text()).timeMs;
+  window.__nsShaftQa.setPlatforms([
+    { id: 33, x: 80, y: 140, width: 96, kind: "normal", variant: "normal",
+      direction: 1, phase: 0, collidable: true, activationState: "active" },
+    { id: 31, x: 80, y: 200, width: 96, kind: "spring", variant: "spring",
+      direction: 1, phase: 0, collidable: true, activationState: "triggered",
+      activationAgeMs: 0 },
+    { id: 32, x: 80, y: 260, width: 200, kind: "normal", variant: "normal",
+      direction: 1, phase: 0, collidable: true, activationState: "active" }
+  ]);
+  window.__nsShaftQa.setPlayer(0, {
+    x: 200, y: 200, vx: 0, vy: 0, pose: "stand", standingPlatformId: 31,
+    standingPlayerId: null, onPlatformSince: timeMs,
+    springIgnoredPlatformIds: [], springSourcePlatformId: null,
+    springLaunchAtMs: timeMs + 100,
+    springLaunchPlatformId: 31
+  });
+  window.advanceTime(900);
+});
+state = await capture("05g-spring-lands-next-lower-block");
+if (state.players[0].standingPlatformId !== 32 ||
+    state.players[0].springIgnoredPlatformIds.length !== 0) {
+  throw new Error(`Spring skipped the next lower block: ${JSON.stringify(state.players[0])}`);
+}
+
+const repeatedSpring = await page.evaluate(() => {
+  const timeMs = JSON.parse(window.render_game_to_text()).timeMs;
+  window.__nsShaftQa.setPlatforms([{
+    id: 41, x: 80, y: 260, width: 96, kind: "spring", variant: "spring",
+    direction: 1, phase: 0, collidable: true, activationState: "active"
+  }]);
+  window.__nsShaftQa.setPlayer(0, {
+    x: 128, y: 260, vx: 0, vy: 0, pose: "stand", standingPlatformId: 41,
+    standingPlayerId: null, onPlatformSince: timeMs,
+    springIgnoredPlatformIds: [], springSourcePlatformId: null,
+    springLaunchAtMs: timeMs + 100, springLaunchPlatformId: 41
+  });
+  let launched = false;
+  let landed = false;
+  let relaunched = false;
+  for (let elapsed = 0; elapsed < 1800; elapsed += 20) {
+    window.advanceTime(20);
+    const player = JSON.parse(window.render_game_to_text()).players[0];
+    if (!launched && player.springSourcePlatformId === 41 && player.vy < 0) launched = true;
+    else if (launched && !landed && player.standingPlatformId === 41) landed = true;
+    else if (landed && player.springSourcePlatformId === 41 && player.vy < 0) {
+      relaunched = true;
+      break;
+    }
+  }
+  return { launched, landed, relaunched };
+});
+state = await capture("05h-same-spring-relaunches");
+if (!repeatedSpring.launched || !repeatedSpring.landed || !repeatedSpring.relaunched) {
+  throw new Error(`Same spring did not relaunch: ${JSON.stringify(repeatedSpring)}`);
+}
+
+await page.getByRole("button", { name: "一時停止" }).click();
 await page.waitForTimeout(40);
 state = await capture("06-paused");
 if (state.mode !== "paused" || state.audio.contextState !== "suspended" ||
     !state.audio.musicActive) {
   throw new Error(`Pause failed: ${JSON.stringify({ mode: state.mode, audio: state.audio })}`);
 }
-await page.getByRole("button", { name: "暫停" }).click();
+await page.getByRole("button", { name: "一時停止" }).click();
 await page.waitForTimeout(40);
 state = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
 if (state.mode !== "playing" || state.audio.contextState !== "running" ||
@@ -456,7 +548,7 @@ if (state.mode !== "playing" || state.audio.contextState !== "running" ||
 await page.evaluate(() => window.dispatchEvent(new Event("blur")));
 state = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
 if (state.mode !== "paused") throw new Error(`Blur did not auto-pause: ${state.mode}`);
-await page.getByRole("button", { name: "暫停" }).click();
+await page.getByRole("button", { name: "一時停止" }).click();
 
 await page.evaluate(() => {
   window.__nsShaftQa.setProgress(170);
@@ -605,7 +697,7 @@ if (!deadPlayerMotion.dead || !deadPlayerMotion.survivorAlive ||
 }
 await capture("09e-two-player-death-fall");
 
-await page.getByRole("button", { name: "中止遊戲" }).click();
+await page.getByRole("button", { name: "中止" }).click();
 state = await capture("10-abort-to-title");
 if (state.ui !== "title") throw new Error(`Abort failed: ${state.ui}`);
 
@@ -643,7 +735,7 @@ if (!fullscreenGeometry.active ||
 await capture("12-integer-scale-ready");
 await page.keyboard.press("KeyF");
 
-await page.getByRole("button", { name: "中止遊戲" }).click();
+await page.getByRole("button", { name: "中止" }).click();
 await page.setViewportSize({ width: 1400, height: 700 });
 await page.evaluate(() => window.__nsShaftQa.startRace());
 await page.waitForTimeout(60);
@@ -660,6 +752,31 @@ state = await capture("13-online-split-race");
 if (state.ui !== "race" || state.race?.local?.players?.length !== 1) {
   throw new Error(`Split race did not start: ${JSON.stringify(state)}`);
 }
+const deadPlayerPauseDialog = await page.evaluate(() => {
+  window.__nsShaftQa.setRaceRemotePlayer({ alive: false, health: 0, pose: "dead" });
+  window.__nsShaftQa.setOnlinePause({
+    requestedBy: 0,
+    ready: { 0: true, 1: false },
+    resumeAt: null
+  });
+  const dialog = document.querySelector("#online-state");
+  return {
+    player1: dialog.querySelector('[data-pause-player="0"]')?.textContent,
+    player2: dialog.querySelector('[data-pause-player="1"]')?.textContent,
+    readyHidden: dialog.querySelector("#online-state-ready")?.hidden,
+    readyDisabled: dialog.querySelector("#online-state-ready")?.disabled
+  };
+});
+if (deadPlayerPauseDialog.player1 !== "準備完了" ||
+    deadPlayerPauseDialog.player2 !== "ゲームオーバー" ||
+    deadPlayerPauseDialog.readyHidden || !deadPlayerPauseDialog.readyDisabled) {
+  throw new Error(`Dead player still blocked pause resume: ${JSON.stringify(deadPlayerPauseDialog)}`);
+}
+await page.evaluate(() => {
+  window.__nsShaftQa.setOnlinePause(null);
+  window.advanceTime(20);
+  window.__nsShaftQa.setRaceRemotePlayer({ alive: true, health: 12, pose: "stand" });
+});
 await page.evaluate(() => window.__nsShaftQa.setOnlinePause({
   requestedBy: 0,
   ready: { 0: true, 1: false },
@@ -768,9 +885,12 @@ if (responsiveRaceGeometry.width > 900 ||
     `Split race does not fit a narrow desktop viewport: ${JSON.stringify(responsiveRaceGeometry)}`
   );
 }
-await page.evaluate(() => window.__nsShaftQa.setOnlineRoundPhase("results", 3000));
+await page.evaluate(() => window.__nsShaftQa.setOnlineRoundPhase("results", 5000));
+await page.evaluate(() => window.__nsShaftQa.setOnlineResultRank(2));
 state = await capture("13c-online-results");
-if (state.online?.phase !== "results" || !state.online?.display) {
+if (state.online?.phase !== "results" || !state.online?.display ||
+    !state.online?.dialog?.detail?.includes("BEST 5 第2位") ||
+    !state.online?.dialog?.detail?.includes("部屋に戻るまで 5")) {
   throw new Error(`Online results overlay is missing: ${JSON.stringify(state.online)}`);
 }
 await page.evaluate(() => window.__nsShaftQa.setOnlineRoundPhase("lobby"));

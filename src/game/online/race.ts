@@ -5,6 +5,7 @@ import type { OnlineMechanismOptions } from "./session";
 const STEP_MS = 1000 / 60;
 const MIN_REMOTE_RENDER_DELAY_MS = 100;
 const MAX_REMOTE_RENDER_DELAY_MS = 250;
+export const RACE_HEARTBEAT_MS = 1000;
 
 export interface RaceSnapshot {
   playerId: 0 | 1;
@@ -64,6 +65,7 @@ export class OnlineRaceController {
   private remoteReceivedAt: number | null = null;
   private lastPublishedTick = -1;
   private lastPublishedMode: GameStateSnapshot["mode"] = "playing";
+  private lastPublishedAt: number | null = null;
   private nextSequence = 0;
   private averageArrivalMs = MIN_REMOTE_RENDER_DELAY_MS;
   private arrivalJitterMs = 0;
@@ -103,9 +105,18 @@ export class OnlineRaceController {
       this.lastPublishedMode = state.mode;
       void this.publish(state);
     }
+    this.heartbeat();
+  }
+
+  heartbeat(): void {
+    if (this.startedAt === null) return;
+    const now = this.now();
+    if (this.lastPublishedAt !== null && now - this.lastPublishedAt < RACE_HEARTBEAT_MS) return;
+    void this.publish(this.game.snapshot());
   }
 
   private publish(state: GameStateSnapshot): Promise<void> {
+    this.lastPublishedAt = this.now();
     return this.config.sendSnapshot(serializeRaceSnapshot(
       this.config.playerId,
       this.config.playerName,
@@ -116,10 +127,10 @@ export class OnlineRaceController {
     ));
   }
 
-  receiveSnapshot(snapshot: RaceSnapshot): void {
-    if (snapshot.playerId === this.config.playerId) return;
-    if (snapshot.round !== (this.config.round ?? 0)) return;
-    if (this.latestRemote && snapshot.sequence <= this.latestRemote.sequence) return;
+  receiveSnapshot(snapshot: RaceSnapshot): boolean {
+    if (snapshot.playerId === this.config.playerId) return false;
+    if (snapshot.round !== (this.config.round ?? 0)) return false;
+    if (this.latestRemote && snapshot.sequence <= this.latestRemote.sequence) return false;
     const receivedAt = this.now();
     if (this.remoteReceivedAt !== null) {
       const interval = Math.max(0, receivedAt - this.remoteReceivedAt);
@@ -142,6 +153,7 @@ export class OnlineRaceController {
       }
     };
     this.remoteReceivedAt = receivedAt;
+    return true;
   }
 
   localSnapshot(): GameStateSnapshot {

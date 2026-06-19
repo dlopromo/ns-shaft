@@ -28,4 +28,11 @@ describe("online pause lifecycle", () => {
     expect(schedulePauseResume(pause, 10_000)?.resumeAt).toBe(13_000);
   });
 
+  test("does not require a dead player to mark resume ready", () => {
+    let pause: OnlinePauseState = requestOnlinePause(0);
+    pause = markPauseReady(pause, 0);
+    expect(schedulePauseResume(pause, 10_000, { 0: true, 1: false })?.resumeAt)
+      .toBe(13_000);
+  });
+
 });

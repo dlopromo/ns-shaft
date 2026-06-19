@@ -11,10 +11,12 @@ export const IPEL_PHYSICS = {
   gravity: 0.0015,
   controlVelocity: 0.2,
   conveyorVelocity: 0.1,
+  conveyorAssistVelocity: 0.15,
+  conveyorResistanceVelocity: 0.05,
   springVelocity: -0.5,
   springCompressionMs: 100,
-  disappearingHoldMs: 150,
-  disappearingTurnMs: 240,
+  disappearingHoldMs: 100,
+  disappearingTurnMs: 250,
   platformGap: 60,
   platformCollisionHeight: 12,
   playerCollisionSize: 26,
@@ -30,7 +32,7 @@ const HEIGHT = GAME_LAYOUT.playfield.height;
 const PLAYABLE_LEFT = GAME_LAYOUT.playable.x;
 const PLAYABLE_RIGHT = GAME_LAYOUT.playable.x + GAME_LAYOUT.playable.width;
 const PLAYER_RENDER_HALF_WIDTH = 16;
-const SPRING_LAUNCH_MS = IPEL_PHYSICS.springCompressionMs * 2;
+const SPRING_LAUNCH_MS = IPEL_PHYSICS.springCompressionMs;
 const ROTATING_CYCLE_MS =
   IPEL_PHYSICS.disappearingHoldMs + IPEL_PHYSICS.disappearingTurnMs;
 const THREE_ROW_REACH_MS = 500;
@@ -83,7 +85,10 @@ export class GameSimulation {
       standingPlatformId: null,
       standingPlayerId: null,
       onPlatformSince: null,
-      springIgnoreAboveY: null,
+      springIgnoredPlatformIds: [],
+      springSourcePlatformId: null,
+      springLaunchAtMs: null,
+      springLaunchPlatformId: null,
       hurtUntilTick: 0,
       hurtUntilMs: 0
     }));
@@ -118,6 +123,20 @@ export class GameSimulation {
 
   applyCheckpoint(checkpoint: SimulationCheckpoint): void {
     const value = structuredClone(checkpoint);
+    for (const player of value.state.players) {
+      const legacy = player as PlayerState & {
+        springIgnoreAboveY?: number | null;
+        springIgnorePlatformId?: number | null;
+        springLaunchY?: number | null;
+      };
+      player.springIgnoredPlatformIds = Array.isArray(player.springIgnoredPlatformIds)
+        ? [...player.springIgnoredPlatformIds]
+        : [];
+      player.springSourcePlatformId = player.springSourcePlatformId ?? null;
+      delete legacy.springIgnoreAboveY;
+      delete legacy.springIgnorePlatformId;
+      delete legacy.springLaunchY;
+    }
     this.state = value.state;
     this.random.importState(value.randomState);
     this.nextPlatformId = value.nextPlatformId;
@@ -239,20 +258,44 @@ export class GameSimulation {
     const direction = Number(input.right) - Number(input.left);
     if (direction !== 0) player.facing = direction < 0 ? "left" : "right";
     const control = direction * IPEL_PHYSICS.controlVelocity;
-    if (player.springIgnoreAboveY !== null &&
-        player.vy >= 0 &&
-        player.y >= player.springIgnoreAboveY) {
-      player.springIgnoreAboveY = null;
-    }
 
     const standing = player.standingPlatformId === null ? undefined :
       this.state.platforms.find((platform) => platform.id === player.standingPlatformId);
     const standingPlayer = player.standingPlayerId === null ? undefined :
       this.state.players.find((other) => other.id === player.standingPlayerId && other.alive);
-    player.vx = standing?.variant.startsWith("conveyor")
-      ? standing.conveyorVelocity
-      : 0;
+    if (standing?.variant.startsWith("conveyor")) {
+      const beltDirection = Math.sign(standing.conveyorVelocity);
+      player.vx = direction === 0
+        ? standing.conveyorVelocity
+        : direction === beltDirection
+          ? direction * IPEL_PHYSICS.conveyorAssistVelocity
+          : beltDirection * IPEL_PHYSICS.conveyorResistanceVelocity;
+    } else {
+      player.vx = 0;
+    }
     player.x = this.clampPlayerX(player.x + (player.vx + control) * stepMs);
+    if (standing?.variant === "spring" && player.springLaunchAtMs === null) {
+      this.armSpring(player, standing, player.onPlatformSince ?? this.state.timeMs);
+    }
+    if (player.springLaunchAtMs !== null && this.state.timeMs >= player.springLaunchAtMs) {
+      const platformId = player.springLaunchPlatformId;
+      player.standingPlatformId = null;
+      player.standingPlayerId = null;
+      player.onPlatformSince = null;
+      player.vy = IPEL_PHYSICS.springVelocity;
+      const launchPlatform = this.state.platforms.find((platform) => platform.id === platformId);
+      const launchY = launchPlatform?.y ?? player.y;
+      player.springIgnoredPlatformIds = this.state.platforms
+        .filter((platform) => platform.y <= launchY || platform.id === platformId)
+        .map((platform) => platform.id)
+        .sort((left, right) => left - right);
+      player.springSourcePlatformId = platformId;
+      this.clearSpringLaunch(player);
+      this.events.push({ type: "spring", playerId: player.id, platformId: platformId ?? undefined });
+      player.pose = "jump";
+      this.resolveCeiling(player);
+      return;
+    }
     if (standingPlayer && this.playerOverlapsPlayerHorizontally(player, standingPlayer)) {
       player.y = standingPlayer.y - standingPlayer.height;
       player.vy = standingPlayer.vy;
@@ -271,18 +314,8 @@ export class GameSimulation {
         this.triggerPlatform(standing);
       }
       if (standing.variant === "spring") {
-        if (standing.activationState === "active") this.triggerPlatform(standing);
-        if (standing.activationAgeMs >= SPRING_LAUNCH_MS) {
-          player.standingPlatformId = null;
-          player.standingPlayerId = null;
-          player.onPlatformSince = null;
-          player.vy = IPEL_PHYSICS.springVelocity;
-          player.springIgnoreAboveY = standing.y;
-          this.events.push({ type: "spring", playerId: player.id, platformId: standing.id });
-        } else {
-          this.resolveCeiling(player);
-          return;
-        }
+        this.resolveCeiling(player);
+        return;
       } else if (player.standingPlatformId !== null) {
         this.resolveCeiling(player);
         return;
@@ -310,6 +343,8 @@ export class GameSimulation {
       player.standingPlayerId = playerLanding.id;
       player.standingPlatformId = null;
       player.onPlatformSince = this.state.timeMs;
+      this.clearSpringIgnore(player);
+      this.clearSpringLaunch(player);
       player.pose = "stand";
     } else if (landing) {
       player.y = landing.y;
@@ -331,7 +366,8 @@ export class GameSimulation {
     player.pose = "dead";
     player.standingPlatformId = null;
     player.standingPlayerId = null;
-    player.springIgnoreAboveY = null;
+    this.clearSpringIgnore(player);
+    this.clearSpringLaunch(player);
     this.events.push({ type: "death", playerId: player.id });
   }
 
@@ -364,23 +400,32 @@ export class GameSimulation {
     platformVelocity: number,
     stepMs: number
   ): PlatformState | undefined {
-    return this.state.platforms.find((platform) =>
-      platform.collidable &&
-      (player.springIgnoreAboveY === null || platform.y >= player.springIgnoreAboveY || platform.variant === "spring") &&
-      this.playerOverlapsPlatform(player, platform) &&
-      previousFoot <= platform.y - platformVelocity * stepMs &&
-      newFoot >= platform.y
-    );
+    return this.state.platforms
+      .filter((platform) =>
+        platform.collidable &&
+        (!player.springIgnoredPlatformIds.includes(platform.id) ||
+          platform.id === player.springSourcePlatformId) &&
+        this.playerOverlapsPlatform(player, platform) &&
+        previousFoot <= platform.y - platformVelocity * stepMs &&
+        newFoot >= platform.y
+      )
+      .sort((left, right) => left.y - right.y)[0];
   }
 
   private land(player: PlayerState, platform: PlatformState, velocity: number): void {
     player.vy = velocity;
     player.standingPlatformId = platform.id;
     player.standingPlayerId = null;
-    player.springIgnoreAboveY = null;
+    this.clearSpringIgnore(player);
     player.onPlatformSince = this.state.timeMs;
-    if (platform.variant === "disappearing" || platform.variant === "spring") {
+    if (platform.variant === "disappearing") {
       this.triggerPlatform(platform);
+    }
+    if (platform.variant === "spring") {
+      platform.activationState = "triggered";
+      platform.activationAgeMs = 0;
+      platform.ageTicks = 0;
+      this.armSpring(player, platform, this.state.timeMs);
     }
     if (platform.variant.startsWith("conveyor")) {
       this.events.push({ type: "conveyor", playerId: player.id, platformId: platform.id });
@@ -402,17 +447,33 @@ export class GameSimulation {
     }
   }
 
+  private armSpring(player: PlayerState, platform: PlatformState, landedAtMs: number): void {
+    player.springLaunchAtMs = landedAtMs + SPRING_LAUNCH_MS;
+    player.springLaunchPlatformId = platform.id;
+  }
+
+  private clearSpringLaunch(player: PlayerState): void {
+    player.springLaunchAtMs = null;
+    player.springLaunchPlatformId = null;
+  }
+
+  private clearSpringIgnore(player: PlayerState): void {
+    player.springIgnoredPlatformIds = [];
+    player.springSourcePlatformId = null;
+  }
+
   private resolveCeiling(player: PlayerState): void {
     if (player.y - player.height >= 0) return;
     player.y = player.height;
     player.vy = 0;
+    this.clearSpringIgnore(player);
+    this.clearSpringLaunch(player);
     if (player.standingPlatformId !== null) {
       const platform = this.state.platforms.find((item) => item.id === player.standingPlatformId);
       if (platform?.variant.startsWith("conveyor")) player.vx = 0;
       player.standingPlatformId = null;
       player.standingPlayerId = null;
       player.onPlatformSince = null;
-      player.springIgnoreAboveY = null;
     }
     player.health = Math.max(0, player.health - IPEL_PHYSICS.ceilingDamage);
     player.hurtUntilMs = this.state.timeMs + IPEL_PHYSICS.hurtBlinkMs;
@@ -449,7 +510,7 @@ export class GameSimulation {
     for (let y = startY; y >= 0; y -= IPEL_PHYSICS.platformGap) rows.unshift(y);
     for (const y of rows) {
       initial.push(this.createPlatform(
-        y === startY ? "normal" : this.pickVariant(),
+        y === startY ? "normal" : this.pickVariant(initial),
         y === startY
           ? PLAYABLE_LEFT + (GAME_LAYOUT.playable.width - IPEL_PHYSICS.platformWidth) / 2
           : this.randomPlatformX(initial.slice(-1)),
@@ -458,7 +519,7 @@ export class GameSimulation {
       ));
     }
     initial.push(this.createPlatform(
-      this.pickVariant(),
+      this.pickVariant(initial),
       this.randomPlatformX(initial.slice(-3)),
       startY + IPEL_PHYSICS.platformGap,
       this.nextFloorSequence++
@@ -484,7 +545,7 @@ export class GameSimulation {
         .sort((left, right) => right.y - left.y)
         .slice(0, 1);
       const next = this.createPlatform(
-        this.pickVariant(),
+        this.pickVariant(this.state.platforms),
         this.randomPlatformX(anchors),
         lowest.y + IPEL_PHYSICS.platformGap,
         this.nextFloorSequence++
@@ -553,7 +614,7 @@ export class GameSimulation {
     );
   }
 
-  private pickVariant(): PlatformVariant {
+  private pickVariant(recentPlatforms: PlatformState[]): PlatformVariant {
     const weights = { ...DIFFICULTIES[this.state.difficulty].weights };
     if (!this.options.rotating) weights.disappearing = 0;
     if (!this.options.conveyor) {
@@ -561,6 +622,10 @@ export class GameSimulation {
       weights["conveyor-right"] = 0;
     }
     if (!this.options.spring) weights.spring = 0;
+    const recent = recentPlatforms.slice(-2);
+    if (recent.length === 2 && recent[0].variant === recent[1].variant) {
+      weights[recent[0].variant] = 0;
+    }
     const total = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
     let roll = this.random.next() * total;
     for (const [variant, weight] of Object.entries(weights) as [PlatformVariant, number][]) {

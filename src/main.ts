@@ -5,10 +5,11 @@ import { Renderer } from "./game/renderer";
 import { integerScaleForViewport } from "./game/layout";
 import { GameSimulation } from "./game/simulation";
 import { loadSave, SAVE_KEY } from "./game/storage";
-import { t } from "./game/i18n";
+import { setLocale, t, type TranslationKey } from "./game/i18n";
 import { normalizePlayerName } from "./game/player-name";
 import {
   FirebaseLeaderboard,
+  rankLeaderboardSubmission,
   type LeaderboardMode,
   type RankedLeaderboardEntry
 } from "./game/leaderboard";
@@ -41,9 +42,11 @@ import {
 import {
   ONLINE_COUNTDOWN_MS,
   ONLINE_RESULTS_MS,
+  buildOnlineResultViewModel,
   nextOnlineHostAction,
   onlineCountdownLabel,
   onlineRaceResult,
+  onlineResultsCountdownLabel,
   type OnlineRoomPhase
 } from "./game/online/round";
 import {
@@ -69,6 +72,7 @@ interface OnlineRoomMeta {
   bufferTicks?: number;
   countdownEndsAt?: number | null;
   resultsEndsAt?: number | null;
+  resultRanks?: Partial<Record<0 | 1, number>>;
   hostConnected?: boolean;
   guestConnected?: boolean;
   pause?: OnlinePauseState;
@@ -91,6 +95,7 @@ declare global {
       setOnlineRoundPhase: (phase: OnlineRoomPhase, endsInMs?: number) => void | Promise<void>;
       setOnlinePause: (pause: OnlinePauseState) => void;
       setOnlineConnection: (connected: boolean, idleMs: number) => void;
+      setOnlineResultRank: (rank: number) => void;
       showOnlineLobby: (
         players: LobbyRoomData["players"],
         localPlayerId?: 0 | 1
@@ -104,7 +109,7 @@ if (!root) throw new Error("#app was not found");
 const assetUrl = (path: string): string => `${import.meta.env.BASE_URL}${path}`;
 const soundPreviewRows = AUDIO_EFFECTS.map((effect) => `
   <li>
-    <button type="button" data-sound-preview="${effect.event}">Play</button>
+    <button type="button" data-sound-preview="${effect.event}" data-i18n="common.play">${t("common.play")}</button>
     <span>${effect.event}</span>
     <code>wave-${effect.resourceId}</code>
     <small>${Math.round(effect.durationMs)}ms</small>
@@ -115,100 +120,114 @@ root.innerHTML = `
   <main class="cabinet">
     <section class="game-frame" aria-label="NS-SHAFT 1.3J">
       <canvas id="game" aria-label="NS-SHAFT game canvas"></canvas>
-      <button id="pause-control" class="frame-control pause-control" aria-label="暫停"></button>
-      <button id="abort-control" class="frame-control abort-control" aria-label="中止遊戲"></button>
+      <button id="pause-control" class="frame-control pause-control" aria-label="${t("common.pause")}" data-i18n-aria="common.pause"></button>
+      <button id="abort-control" class="frame-control abort-control" aria-label="${t("common.abort")}" data-i18n-aria="common.abort"></button>
       <div id="title-screen" class="screen title-screen">
         <img class="title-art" src="${assetUrl("assets/web/rt_bitmap-104-1041.png")}" alt="NS-SHAFT Ver 1.3J">
         <nav class="main-menu">
-          <button data-start="1">１人プレイ</button>
-          <button data-start="2">２人プレイ</button>
-          <button data-open="online">オンライン2P</button>
-          <button data-open="records">ベスト５</button>
-          <button data-open="options">オプション</button>
-          <button data-open="about">このソフトについて</button>
+          <button data-start="1" data-i18n="menu.onePlayer">${t("menu.onePlayer")}</button>
+          <button data-start="2" data-i18n="menu.twoPlayer">${t("menu.twoPlayer")}</button>
+          <button data-open="online" data-i18n="menu.online">${t("menu.online")}</button>
+          <button data-open="records" data-i18n="menu.records">${t("menu.records")}</button>
+          <button data-open="options" data-i18n="menu.options">${t("menu.options")}</button>
+          <button data-open="about" data-i18n="menu.about">${t("menu.about")}</button>
         </nav>
-        <p class="key-help">1P ← →　2P Z X　ESC 一時停止　F 全画面</p>
+        <label class="title-language"><span data-i18n="options.language">${t("options.language")}</span>
+          <select id="locale" aria-label="${t("options.language")}" data-i18n-aria="options.language">
+            <option value="ja" data-i18n="options.japanese">${t("options.japanese")}</option>
+            <option value="zh-Hant" data-i18n="options.traditionalChinese">${t("options.traditionalChinese")}</option>
+            <option value="en" data-i18n="options.english">${t("options.english")}</option>
+          </select>
+        </label>
+        <p class="key-help" data-i18n="menu.keyHelp">${t("menu.keyHelp")}</p>
       </div>
 
       <section id="options-panel" class="screen dialog-screen" hidden>
         <div class="dialog">
-          <h2>難易度・オプション</h2>
-          <label>難易度
+          <h2 data-i18n="options.title">${t("options.title")}</h2>
+          <label><span data-i18n="options.difficulty">${t("options.difficulty")}</span>
             <select id="difficulty">
-              <option value="easy">やさしい</option>
-              <option value="normal">ふつう</option>
-              <option value="hard">むずかしい</option>
+              <option value="easy" data-i18n="options.easy">${t("options.easy")}</option>
+              <option value="normal" data-i18n="options.normal">${t("options.normal")}</option>
+              <option value="hard" data-i18n="options.hard">${t("options.hard")}</option>
             </select>
           </label>
           <div class="player-name-settings">
             <label>1P NAME <input id="player1-name" autocomplete="off"></label>
             <label>2P NAME <input id="player2-name" autocomplete="off"></label>
           </div>
-          <label><input id="conveyor" type="checkbox"> ベルトコンベア</label>
-          <label><input id="spring" type="checkbox"> ジャンプ台</label>
-          <label><input id="rotating" type="checkbox"> 回る床</label>
-          <label><input id="music" type="checkbox"> 音楽</label>
-          <label><input id="sound" type="checkbox"> 効果音</label>
-          <label><input id="fast" type="checkbox"> 高速化</label>
-          <section class="sound-preview" aria-label="効果音テスト">
-            <h3>効果音テスト</h3>
+          <label><input id="conveyor" type="checkbox"> <span data-i18n="options.conveyor">${t("options.conveyor")}</span></label>
+          <label><input id="spring" type="checkbox"> <span data-i18n="options.spring">${t("options.spring")}</span></label>
+          <label><input id="rotating" type="checkbox"> <span data-i18n="options.rotating">${t("options.rotating")}</span></label>
+          <label><input id="music" type="checkbox"> <span data-i18n="options.music">${t("options.music")}</span></label>
+          <label><input id="sound" type="checkbox"> <span data-i18n="options.sound">${t("options.sound")}</span></label>
+          <label><input id="fast" type="checkbox"> <span data-i18n="options.fast">${t("options.fast")}</span></label>
+          <button type="button" data-open="sound" data-i18n="options.soundTest">${t("options.soundTest")}</button>
+          <button data-close data-i18n="common.back">${t("common.back")}</button>
+        </div>
+      </section>
+
+      <section id="sound-panel" class="screen dialog-screen" hidden>
+        <div class="dialog sound-dialog">
+          <h2 data-i18n="options.soundTest">${t("options.soundTest")}</h2>
+          <section class="sound-preview" aria-label="${t("options.soundTest")}" data-i18n-aria="options.soundTest">
             <ol>${soundPreviewRows}</ol>
           </section>
-          <button data-close>戻る</button>
+          <button type="button" data-close-sound data-i18n="common.back">${t("common.back")}</button>
         </div>
       </section>
 
       <section id="records-panel" class="screen records-screen" hidden>
         <div class="records-content">
-          <h2>BEST 5</h2>
-          <nav id="record-modes" class="record-modes" aria-label="ランキングモード">
+          <h2 data-i18n="records.title">${t("records.title")}</h2>
+          <nav id="record-modes" class="record-modes" aria-label="${t("records.title")}" data-i18n-aria="records.title">
             <button type="button" data-record-mode="solo">1P</button>
             <button type="button" data-record-mode="local2p">2P</button>
-            <button type="button" data-record-mode="coop">協力</button>
-            <button type="button" data-record-mode="race">対戦</button>
+            <button type="button" data-record-mode="coop" data-i18n="records.coop">${t("records.coop")}</button>
+            <button type="button" data-record-mode="race" data-i18n="records.race">${t("records.race")}</button>
           </nav>
           <div id="records-list"></div>
           <div class="dialog-actions">
-            <button data-close>戻る</button>
+            <button data-close data-i18n="common.back">${t("common.back")}</button>
           </div>
         </div>
       </section>
 
       <section id="online-panel" class="screen dialog-screen" hidden>
         <div class="dialog online-dialog">
-          <h2>${t("online.title")}</h2>
+          <h2 data-i18n="online.title">${t("online.title")}</h2>
           <p id="online-status">${t("online.description")}</p>
-          <label>${t("online.mode.label")}
+          <label><span data-i18n="online.mode.label">${t("online.mode.label")}</span>
             <select id="online-mode">
-              <option value="coop">${t("online.mode.coop")}</option>
-              <option value="race">${t("online.mode.race")}</option>
+              <option value="coop" data-i18n="online.mode.coop">${t("online.mode.coop")}</option>
+              <option value="race" data-i18n="online.mode.race">${t("online.mode.race")}</option>
             </select>
           </label>
-          <label>${t("online.name")} <input id="online-name" autocomplete="off" value="PLAYER1"></label>
-          <section id="online-players" class="online-players" aria-label="ルームのプレイヤー" hidden>
+          <label><span data-i18n="online.name">${t("online.name")}</span> <input id="online-name" autocomplete="off" value="PLAYER1"></label>
+          <section id="online-players" class="online-players" aria-label="${t("online.playersAria")}" data-i18n-aria="online.playersAria" hidden>
             <div class="online-player" data-player="0" data-status="waiting">
-              <span>1P ホスト</span><b>---</b><strong>${t("online.waiting")}</strong>
+              <span data-i18n="online.host">${t("online.host")}</span><b>---</b><strong>${t("online.waiting")}</strong>
             </div>
             <div class="online-player" data-player="1" data-status="waiting">
-              <span>2P ゲスト</span><b>---</b><strong>${t("online.waiting")}</strong>
+              <span data-i18n="online.guest">${t("online.guest")}</span><b>---</b><strong>${t("online.waiting")}</strong>
             </div>
           </section>
           <div class="dialog-actions">
-            <button id="online-create" type="button">${t("online.room.create")}</button>
-            <button id="online-ready" type="button" data-state="available" disabled>${t("online.ready")}</button>
+            <button id="online-create" type="button" data-i18n="online.room.create">${t("online.room.create")}</button>
+            <button id="online-ready" type="button" data-state="available" data-i18n="online.ready" disabled>${t("online.ready")}</button>
           </div>
-          <label>${t("online.room.code")} <input id="online-code" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label>
+          <label><span data-i18n="online.room.code">${t("online.room.code")}</span> <input id="online-code" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label>
           <div class="dialog-actions">
-            <button id="online-join" type="button">${t("online.room.join")}</button>
-            <button id="online-copy" type="button" disabled>${t("online.room.copy")}</button>
-            <button data-close type="button">${t("online.back")}</button>
+            <button id="online-join" type="button" data-i18n="online.room.join">${t("online.room.join")}</button>
+            <button id="online-copy" type="button" data-i18n="online.room.copy" disabled>${t("online.room.copy")}</button>
+            <button data-close type="button" data-i18n="online.back">${t("online.back")}</button>
           </div>
         </div>
       </section>
 
       <section id="about-panel" class="screen about-screen" hidden>
         <img src="${assetUrl("assets/web/rt_bitmap-105-1041.png")}" alt="NS-SHAFT copyright">
-        <button data-close>戻る</button>
+        <button data-close data-i18n="common.back">${t("common.back")}</button>
       </section>
 
       <section id="online-state" class="online-state" hidden>
@@ -220,22 +239,22 @@ root.innerHTML = `
             <span>2P</span><strong data-pause-player="1">${t("online.waiting")}</strong>
           </div>
           <div id="online-state-actions" class="dialog-actions" hidden>
-            <button id="online-state-ready" type="button">${t("online.pause.ready")}</button>
-            <button id="online-state-leave" type="button">${t("online.room.leave")}</button>
+            <button id="online-state-ready" type="button" data-i18n="online.pause.ready">${t("online.pause.ready")}</button>
+            <button id="online-state-leave" type="button" data-i18n="online.room.leave">${t("online.room.leave")}</button>
           </div>
         </div>
       </section>
-      <div id="online-connection-indicator" class="online-connection-indicator" hidden>
+      <div id="online-connection-indicator" class="online-connection-indicator" data-i18n="online.connection.syncing" hidden>
         ${t("online.connection.syncing")}
       </div>
     </section>
-    <section id="race-stage" class="race-stage" aria-label="オンライン対戦" hidden>
+    <section id="race-stage" class="race-stage" aria-label="${t("online.raceAria")}" data-i18n-aria="online.raceAria" hidden>
       <div class="race-strip">
         <article class="race-pane race-pane-local" data-role="local" data-player-color="yellow">
           <header>1P</header>
           <canvas id="race-local" class="race-canvas" aria-label="1Pゲーム画面"></canvas>
-          <button id="race-pause" class="frame-control pause-control" aria-label="暫停"></button>
-          <button id="race-abort" class="frame-control abort-control" aria-label="中止遊戲"></button>
+          <button id="race-pause" class="frame-control pause-control" aria-label="${t("common.pause")}" data-i18n-aria="common.pause"></button>
+          <button id="race-abort" class="frame-control abort-control" aria-label="${t("common.abort")}" data-i18n-aria="common.abort"></button>
         </article>
         <article class="race-pane race-pane-remote" data-role="remote" data-player-color="green">
           <header>2P</header>
@@ -250,12 +269,14 @@ const cabinet = document.querySelector<HTMLElement>(".cabinet")!;
 const gameFrame = document.querySelector<HTMLElement>(".game-frame")!;
 const title = document.querySelector<HTMLElement>("#title-screen")!;
 const optionsPanel = document.querySelector<HTMLElement>("#options-panel")!;
+const soundPanel = document.querySelector<HTMLElement>("#sound-panel")!;
 const recordsPanel = document.querySelector<HTMLElement>("#records-panel")!;
 const player1Name = document.querySelector<HTMLInputElement>("#player1-name")!;
 const player2Name = document.querySelector<HTMLInputElement>("#player2-name")!;
 const onlinePanel = document.querySelector<HTMLElement>("#online-panel")!;
 const aboutPanel = document.querySelector<HTMLElement>("#about-panel")!;
 const difficulty = document.querySelector<HTMLSelectElement>("#difficulty")!;
+const locale = document.querySelector<HTMLSelectElement>("#locale")!;
 const onlineStatus = document.querySelector<HTMLElement>("#online-status")!;
 const onlineMode = document.querySelector<HTMLSelectElement>("#online-mode")!;
 const onlineName = document.querySelector<HTMLInputElement>("#online-name")!;
@@ -290,7 +311,8 @@ const raceLocalRenderer = new Renderer(raceLocalCanvas);
 const raceRemoteRenderer = new Renderer(raceRemoteCanvas);
 const keyboard = new KeyboardInput();
 const audio = new GameAudio();
-let save: SaveData = loadSave(localStorage.getItem(SAVE_KEY));
+let save: SaveData = loadSave(localStorage.getItem(SAVE_KEY), navigator.languages);
+setLocale(save.settings.locale);
 let game: GameSimulation | null = null;
 let onlineGame: OnlineGameController | null = null;
 let onlineRace: OnlineRaceController | null = null;
@@ -366,6 +388,7 @@ function onlineServerNow(): number {
 
 function applySettingsToControls(): void {
   difficulty.value = save.settings.difficulty;
+  locale.value = save.settings.locale;
   player1Name.value = save.playerNames[0];
   player2Name.value = save.playerNames[1];
   for (const key of ["conveyor", "spring", "rotating", "music", "sound", "fast"] as const) {
@@ -374,8 +397,25 @@ function applySettingsToControls(): void {
   syncRendererSettings();
 }
 
+function applyLocaleToDocument(): void {
+  setLocale(save.settings.locale);
+  document.documentElement.lang = save.settings.locale;
+  document.querySelectorAll<HTMLElement>("[data-i18n]").forEach((element) => {
+    element.textContent = t(element.dataset.i18n as TranslationKey);
+  });
+  document.querySelectorAll<HTMLElement>("[data-i18n-aria]").forEach((element) => {
+    element.setAttribute("aria-label", t(element.dataset.i18nAria as TranslationKey));
+  });
+  if (!onlineRoom && !onlinePanel.hidden) setOnlineStatus(t("online.description"));
+  if (onlineRoomData && onlineRoom) renderOnlineLobby(onlineRoomData, onlineRoom.playerId);
+  renderOnlineStateDialog();
+  drawRaceStatus();
+  if (!recordsPanel.hidden) void renderRecords();
+}
+
 function closePanels(): void {
   optionsPanel.hidden = true;
+  soundPanel.hidden = true;
   recordsPanel.hidden = true;
   onlinePanel.hidden = true;
   aboutPanel.hidden = true;
@@ -543,12 +583,14 @@ function frame(now: number): void {
 }
 
 async function renderRecords(): Promise<void> {
-  const names: Record<Difficulty, string> = { easy: "やさしい", normal: "ふつう", hard: "むずかしい" };
+  const names: Record<Difficulty, string> = {
+    easy: t("options.easy"), normal: t("options.normal"), hard: t("options.hard")
+  };
   let service: FirebaseLeaderboard;
   try {
     service = getLeaderboard();
   } catch {
-    document.querySelector("#records-list")!.innerHTML = "<p>ランキングに接続できません。</p>";
+    document.querySelector("#records-list")!.innerHTML = `<p>${t("records.unavailable")}</p>`;
     return;
   }
   document.querySelectorAll<HTMLElement>("[data-record-mode]").forEach((button) => {
@@ -566,7 +608,7 @@ async function renderRecords(): Promise<void> {
     <section><h3>${names[level]}</h3><ol>${Array.from({ length: 5 }, (_, index) => {
       const entry: RankedLeaderboardEntry | undefined = results[levelIndex][index];
       const players = entry ? [entry.player1, entry.player2].filter(Boolean).join(" / ") : "--------";
-      return `<li><span>${players}</span><b>${entry?.floor ?? 0} 階</b></li>`;
+      return `<li><span>${players}</span><b>${t("records.floor", { floor: entry?.floor ?? 0 })}</b></li>`;
     }).join("")}</ol></section>`).join("");
 }
 
@@ -645,12 +687,15 @@ function renderOnlineLobby(room: LobbyRoomData, localPlayerId: 0 | 1): void {
   for (const player of view.players) {
     const row = onlinePlayers.querySelector<HTMLElement>(`[data-player="${player.playerId}"]`)!;
     row.dataset.status = player.status;
-    row.querySelector("span")!.textContent = player.label;
+    row.querySelector("span")!.textContent = t(player.playerId === 0 ? "online.host" : "online.guest");
     row.querySelector("b")!.textContent = player.name;
-    row.querySelector("strong")!.textContent = player.text;
+    row.querySelector("strong")!.textContent = t(
+      player.status === "ready" ? "online.ready" :
+        player.status === "connected" ? "online.connected" : "online.waiting"
+    );
   }
   onlineReady.dataset.state = view.readyButton.state;
-  onlineReady.textContent = view.readyButton.label;
+  onlineReady.textContent = `${t("online.ready")}${view.readyButton.state === "ready" ? " ✓" : ""}`;
   onlineReady.disabled = view.readyButton.disabled;
 }
 
@@ -714,13 +759,21 @@ async function submitOnlineResult(room: OnlineRoomHandle, data: OnlineRoomData):
   submittedOnlineRound = round;
   const difficultyLevel = data.meta?.difficulty ?? save.settings.difficulty;
   const localName = data.players?.[room.playerId]?.name ?? onlinePlayerName();
-  await getLeaderboard().submit({
+  const service = getLeaderboard();
+  const submission = await service.submit({
     mode,
     difficulty: difficultyLevel,
     player1: mode === "coop" ? data.players?.[0]?.name ?? "PLAYER1" : localName,
     ...(mode === "coop" ? { player2: data.players?.[1]?.name ?? "PLAYER2" } : {}),
     floor
   });
+  if (!submission.submitted) return;
+  const entries = await service.loadTop(mode, difficultyLevel);
+  const rank = rankLeaderboardSubmission(entries, submission.id) ?? 0;
+  const ranks = mode === "coop"
+    ? { "resultRanks/0": rank, "resultRanks/1": rank }
+    : { [`resultRanks/${room.playerId}`]: rank };
+  await getOnlineSession().updateMeta(room.roomCode, ranks);
 }
 
 async function driveOnlineRoundLifecycle(): Promise<void> {
@@ -740,8 +793,9 @@ async function driveOnlineRoundLifecycle(): Promise<void> {
     }
     return;
   }
-  if (pause && pause.resumeAt === null && pause.ready[0] && pause.ready[1]) {
-    const scheduled = schedulePauseResume(pause, now);
+  if (pause && pause.resumeAt === null) {
+    const scheduled = schedulePauseResume(pause, now, onlinePauseRequiredPlayers());
+    if (scheduled?.resumeAt === null) return;
     onlineTransitionPending = true;
     try {
       await getOnlineSession().updateMeta(room.roomCode, { pause: scheduled });
@@ -790,6 +844,21 @@ async function driveOnlineRoundLifecycle(): Promise<void> {
   } finally {
     onlineTransitionPending = false;
   }
+}
+
+function onlinePauseRequiredPlayers(): Record<0 | 1, boolean> {
+  if (onlineRace && onlineRoom) {
+    const opponentId = onlineRoom.playerId === 0 ? 1 : 0;
+    const required: Record<0 | 1, boolean> = { 0: true, 1: true };
+    required[onlineRoom.playerId] = onlineRace.localSnapshot().players[0]?.alive ?? true;
+    required[opponentId] = onlineRace.remoteSnapshot()?.players[0]?.alive ?? true;
+    return required;
+  }
+  const players = onlineGame?.snapshot().players;
+  return {
+    0: players?.[0]?.alive ?? true,
+    1: players?.[1]?.alive ?? true
+  };
 }
 
 async function leaveOnlineRoom(): Promise<void> {
@@ -1097,9 +1166,8 @@ function prepareOnlineRace(
     round,
     opponentId,
     (snapshot) => {
-      if (snapshot) {
+      if (snapshot && onlineRace?.receiveSnapshot(snapshot)) {
         onlineConnectionMonitor.markPeerActivity(performance.now());
-        onlineRace?.receiveSnapshot(snapshot);
       }
     }
   );
@@ -1136,15 +1204,19 @@ function showOnlineState(
   onlineStateTitle.textContent = titleText;
   onlineStateDetail.textContent = detail;
   const pause = options.pause;
+  const required = onlinePauseRequiredPlayers();
   onlinePausePlayers.hidden = !pause || pause.resumeAt !== null;
   for (const playerId of [0, 1] as const) {
     const status = onlinePausePlayers.querySelector<HTMLElement>(`[data-pause-player="${playerId}"]`)!;
-    status.textContent = pause?.ready[playerId] ? t("online.ready") : t("online.waiting");
-    status.dataset.ready = String(Boolean(pause?.ready[playerId]));
+    status.textContent = !required[playerId]
+      ? t("online.result.gameover")
+      : pause?.ready[playerId] ? t("online.ready") : t("online.waiting");
+    status.dataset.ready = String(!required[playerId] || Boolean(pause?.ready[playerId]));
   }
   onlineStateActions.hidden = !pause && !options.canLeave;
-  onlineStateReady.hidden = !pause || pause.resumeAt !== null;
-  onlineStateReady.disabled = Boolean(pause?.ready[onlineRoom?.playerId ?? 0]);
+  const localPlayerId = onlineRoom?.playerId ?? 0;
+  onlineStateReady.hidden = !pause || pause.resumeAt !== null || !required[localPlayerId];
+  onlineStateReady.disabled = !required[localPlayerId] || Boolean(pause?.ready[localPlayerId]);
   onlineStateLeave.hidden = !options.canLeave && !pause;
 }
 
@@ -1207,16 +1279,32 @@ function renderOnlineStateDialog(): void {
     return;
   }
   if (onlinePhase === "results") {
-    if (onlineRace) {
-      const local = onlineRace.localSnapshot().floor;
-      const remote = onlineRace.remoteSnapshot()?.floor ?? 0;
-      showOnlineState(localizedRaceResult(), `1P ${local} / 2P ${remote}`);
-    } else if (onlineGame) {
-      showOnlineState(
-        t("online.result.gameover"),
-        t("online.result.floor", { floor: onlineGame.snapshot().floor })
-      );
-    }
+    const resultsEndsAt = onlineRoomData?.meta?.resultsEndsAt ?? now;
+    const seconds = Number(onlineResultsCountdownLabel(now, resultsEndsAt));
+    const localFloor = onlineRace?.localSnapshot().floor ?? onlineGame?.snapshot().floor ?? 0;
+    const remoteFloor = onlineRace?.remoteSnapshot()?.floor;
+    const rankValue = onlineRoomData?.meta?.resultRanks?.[onlineRoom.playerId];
+    const view = buildOnlineResultViewModel({
+      mode: onlineRace ? "race" : "coop",
+      localFloor,
+      ...(onlineRace ? { remoteFloor: remoteFloor ?? 0 } : {}),
+      best5Rank: rankValue && rankValue > 0 ? rankValue : null,
+      rankingPending: rankValue === undefined,
+      seconds
+    });
+    const rankText = view.rankingPending ? t("online.result.ranking") :
+      view.best5Rank ? t("online.result.best5", { rank: view.best5Rank }) :
+        t("online.result.notBest5");
+    const placementText = view.mode === "coop" ? t("online.result.shared") :
+      view.placement ? t("online.result.place", { place: view.placement }) :
+        t("online.result.draw");
+    const floors = view.mode === "race"
+      ? `1P ${view.localFloor} / 2P ${view.remoteFloor ?? 0}`
+      : t("online.result.floor", { floor: view.localFloor });
+    showOnlineState(
+      view.mode === "race" ? localizedRaceResult() : t("online.result.gameover"),
+      `${placementText}\n${floors}\n${rankText}\n${t("online.result.next", { seconds: view.seconds })}`
+    );
     return;
   }
   onlineState.hidden = true;
@@ -1264,6 +1352,10 @@ document.querySelectorAll<HTMLButtonElement>("[data-open]").forEach((button) => 
     title.hidden = true;
     const panel = button.dataset.open;
     if (panel === "options") optionsPanel.hidden = false;
+    if (panel === "sound") {
+      optionsPanel.hidden = true;
+      soundPanel.hidden = false;
+    }
     if (panel === "online") {
       onlinePanel.hidden = false;
       onlineName.value = save.lastInputName;
@@ -1301,6 +1393,10 @@ document.querySelectorAll<HTMLButtonElement>("[data-record-mode]").forEach((butt
 document.querySelectorAll<HTMLButtonElement>("[data-close]").forEach((button) => {
   button.addEventListener("click", () => showTitle());
 });
+document.querySelector<HTMLButtonElement>("[data-close-sound]")!.addEventListener("click", () => {
+  soundPanel.hidden = true;
+  optionsPanel.hidden = false;
+});
 document.querySelectorAll<HTMLButtonElement>("[data-sound-preview]").forEach((button) => {
   button.addEventListener("click", () => {
     const effect = button.dataset.soundPreview as EffectName;
@@ -1320,6 +1416,11 @@ difficulty.addEventListener("change", () => {
   save.settings.difficulty = difficulty.value as Difficulty;
   syncRendererSettings();
   persist();
+});
+locale.addEventListener("change", () => {
+  save.settings.locale = locale.value as SaveData["settings"]["locale"];
+  persist();
+  applyLocaleToDocument();
 });
 onlineCreate.addEventListener("click", async () => {
   try {
@@ -1483,7 +1584,7 @@ void resumeSavedOnlineRoom();
 window.render_game_to_text = () => JSON.stringify({
   coordinateSystem: "origin top-left; +x right; +y down; frame 634x436; playfield 420x356 at (22,62)",
   ui: !title.hidden ? "title" : !optionsPanel.hidden ? "options" :
-    !recordsPanel.hidden ? "records" : !onlinePanel.hidden ? "online" :
+    !soundPanel.hidden ? "sound" : !recordsPanel.hidden ? "records" : !onlinePanel.hidden ? "online" :
       onlineRace ? "race" : "game",
   ...((game ?? onlineGame)?.snapshot() ?? onlineRace?.localSnapshot() ?? { mode: "title" }),
   online: onlineRoom ? {
@@ -1615,6 +1716,16 @@ if (qaMode) {
       renderOnlineStateDialog();
       drawRaceStatus();
     },
+    setOnlineResultRank: (rank) => {
+      if (!onlineRoom) return;
+      onlineRoomData ??= { players: {} };
+      onlineRoomData.meta ??= {};
+      onlineRoomData.meta.resultRanks = {
+        ...(onlineRoomData.meta.resultRanks ?? {}),
+        [onlineRoom.playerId]: rank
+      };
+      renderOnlineStateDialog();
+    },
     showOnlineLobby: (players, localPlayerId = 0) => {
       onlinePanel.hidden = false;
       title.hidden = true;
@@ -1632,6 +1743,7 @@ if (qaMode) {
 }
 
 applySettingsToControls();
+applyLocaleToDocument();
 renderer.render({
   mode: "title", difficulty: save.settings.difficulty, floor: 0,
   floorSequence: 0, level: 0, timeMs: 0, cameraY: 0, ticks: 0,

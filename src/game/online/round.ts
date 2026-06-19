@@ -34,6 +34,28 @@ export function onlineCountdownLabel(now: number, countdownEndsAt: number): stri
   return null;
 }
 
+export function onlineResultsCountdownLabel(now: number, resultsEndsAt: number): string {
+  return String(Math.max(0, Math.ceil((resultsEndsAt - now) / 1000)));
+}
+
+export interface OnlineResultViewModel {
+  mode: "coop" | "race";
+  localFloor: number;
+  remoteFloor?: number;
+  placement: 1 | 2 | null;
+  best5Rank: number | null;
+  rankingPending: boolean;
+  seconds: number;
+}
+
+export function buildOnlineResultViewModel(input: Omit<OnlineResultViewModel, "placement">): OnlineResultViewModel {
+  const placement = input.mode !== "race" || input.remoteFloor === undefined ||
+    input.localFloor === input.remoteFloor
+    ? null
+    : input.localFloor > input.remoteFloor ? 1 : 2;
+  return { ...input, placement };
+}
+
 export function onlineRaceResult(localFloor: number, remoteFloor: number):
   "YOU WIN" | "YOU LOSE" | "DRAW" {
   if (localFloor === remoteFloor) return "DRAW";

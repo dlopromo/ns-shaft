@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { GAME_LAYOUT, integerScaleForViewport } from "../src/game/layout";
+import { readFileSync } from "node:fs";
 
 describe("Windows 1.3J native layout", () => {
   test("uses the unscaled 634x436 resource frame", () => {
@@ -64,5 +65,12 @@ describe("Windows 1.3J native layout", () => {
     expect(integerScaleForViewport(1268, 872)).toBe(2);
     expect(integerScaleForViewport(1901, 1307)).toBe(2);
     expect(integerScaleForViewport(500, 400)).toBe(1);
+  });
+
+  test("keeps the title panel native-sized with a full-width language selector", () => {
+    const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.title-screen::before\s*\{[^}]*width:\s*360px;[^}]*height:\s*330px;/s);
+    expect(css).toMatch(/\.title-language select\s*\{[^}]*width:\s*120px;[^}]*height:\s*22px;/s);
+    expect(css).toMatch(/\.title-art\s*\{[^}]*width:\s*288px;[^}]*height:\s*140px;/s);
   });
 });

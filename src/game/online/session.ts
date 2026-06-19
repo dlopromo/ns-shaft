@@ -248,7 +248,8 @@ export class FirebaseOnlineSession {
       round: value.round,
       bufferTicks: value.bufferTicks ?? 12,
       countdownEndsAt: value.countdownEndsAt,
-      resultsEndsAt: null
+      resultsEndsAt: null,
+      resultRanks: null
     });
   }
 

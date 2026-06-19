@@ -3,6 +3,7 @@ import {
   FirebaseLeaderboard,
   leaderboardPath,
   normalizeLeaderboardEntries,
+  rankLeaderboardSubmission,
   type LeaderboardDatabasePort,
   type LeaderboardSubmission
 } from "../src/game/leaderboard";
@@ -56,7 +57,7 @@ describe("global leaderboard", () => {
 
     await expect(leaderboard.submit({
       mode: "solo", difficulty: "normal", player1: "alice!", floor: 18
-    })).resolves.toBe(false);
+    })).resolves.toEqual({ id: "stable-id", submitted: false });
     database.failWrites = false;
     await expect(leaderboard.retryPending()).resolves.toBe(1);
 
@@ -64,6 +65,21 @@ describe("global leaderboard", () => {
       path: "ns-shaft/leaderboards/solo/normal/stable-id",
       value: { uid: "uid-1", player1: "ALICE", floor: 18, createdAt: 1234 }
     });
+  });
+
+  test("returns a stable submission id and finds its Best 5 rank", async () => {
+    const database = new FakeLeaderboardDatabase();
+    const storage = new MemoryStorage();
+    const leaderboard = new FirebaseLeaderboard(database, storage, () => "current-run");
+    await expect(leaderboard.submit({
+      mode: "race", difficulty: "normal", player1: "RUNNER", floor: 20
+    })).resolves.toEqual({ id: "current-run", submitted: true });
+    const entries = normalizeLeaderboardEntries({
+      first: { uid: "u1", player1: "AAA", floor: 30, createdAt: 1 },
+      "current-run": { uid: "uid-1", player1: "RUNNER", floor: 20, createdAt: 2 }
+    });
+    expect(rankLeaderboardSubmission(entries, "current-run")).toBe(2);
+    expect(rankLeaderboardSubmission(entries, "missing")).toBeNull();
   });
 
   test("caches successful top-five reads and exposes the world record", async () => {

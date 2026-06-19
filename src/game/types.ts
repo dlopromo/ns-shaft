@@ -1,4 +1,5 @@
 export type Difficulty = "easy" | "normal" | "hard";
+export type Locale = "ja" | "zh-Hant" | "en";
 export type PlatformKind = "normal" | "spike" | "conveyor" | "spring" | "rotating";
 export type PlatformVariant =
   | "normal" | "spike" | "conveyor-left" | "conveyor-right"
@@ -37,7 +38,10 @@ export interface PlayerState {
   standingPlatformId: number | null;
   standingPlayerId: number | null;
   onPlatformSince: number | null;
-  springIgnoreAboveY: number | null;
+  springIgnoredPlatformIds: number[];
+  springSourcePlatformId: number | null;
+  springLaunchAtMs: number | null;
+  springLaunchPlatformId: number | null;
   hurtUntilTick: number;
   hurtUntilMs: number;
 }
@@ -101,7 +105,7 @@ export interface GameEvent {
 }
 
 export interface SaveData {
-  version: 2;
+  version: 3;
   settings: {
     difficulty: Difficulty;
     music: boolean;
@@ -110,6 +114,7 @@ export interface SaveData {
     conveyor: boolean;
     spring: boolean;
     rotating: boolean;
+    locale: Locale;
   };
   lastInputName: string;
   playerNames: [string, string];

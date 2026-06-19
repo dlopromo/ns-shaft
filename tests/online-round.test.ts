@@ -5,6 +5,8 @@ import {
   ONLINE_RESULTS_MS,
   nextOnlineHostAction,
   onlineCountdownLabel,
+  onlineResultsCountdownLabel,
+  buildOnlineResultViewModel,
   onlineRaceResult
 } from "../src/game/online/round";
 
@@ -20,11 +22,31 @@ describe("online round lifecycle", () => {
     expect(onlineCountdownLabel(5500, 5000)).toBeNull();
   });
 
+  test("builds race and co-op result models with placement, rank, and countdown", () => {
+    expect(buildOnlineResultViewModel({
+      mode: "race", localFloor: 12, remoteFloor: 8,
+      best5Rank: 2, rankingPending: false, seconds: 5
+    })).toEqual({
+      mode: "race", localFloor: 12, remoteFloor: 8, placement: 1,
+      best5Rank: 2, rankingPending: false, seconds: 5
+    });
+    expect(buildOnlineResultViewModel({
+      mode: "coop", localFloor: 9, best5Rank: null,
+      rankingPending: false, seconds: 1
+    })).toEqual({
+      mode: "coop", localFloor: 9, placement: null,
+      best5Rank: null, rankingPending: false, seconds: 1
+    });
+  });
+
   test("keeps results visible for five seconds and compares floors", () => {
     expect(ONLINE_RESULTS_MS).toBe(5000);
     expect(onlineRaceResult(12, 8)).toBe("YOU WIN");
     expect(onlineRaceResult(8, 12)).toBe("YOU LOSE");
     expect(onlineRaceResult(12, 12)).toBe("DRAW");
+    expect(onlineResultsCountdownLabel(5000, 10000)).toBe("5");
+    expect(onlineResultsCountdownLabel(9999, 10000)).toBe("1");
+    expect(onlineResultsCountdownLabel(10000, 10000)).toBe("0");
   });
 
   test("lets only completed phase conditions advance the host lifecycle", () => {

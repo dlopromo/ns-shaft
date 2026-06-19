@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { OnlineRaceController, serializeRaceSnapshot } from "../src/game/online/race";
+import {
+  OnlineRaceController,
+  serializeRaceSnapshot,
+  type RaceSnapshot
+} from "../src/game/online/race";
 import type { InputFrame } from "../src/game/types";
+import { OnlineConnectionMonitor } from "../src/game/online/connection";
 
 const idle: InputFrame = {
   players: [{ left: false, right: false }, { left: false, right: false }],
@@ -8,6 +13,64 @@ const idle: InputFrame = {
 };
 
 describe("OnlineRaceController", () => {
+  test("publishes a heartbeat every second after local gameplay stops", async () => {
+    let now = 0;
+    const sent: RaceSnapshot[] = [];
+    const controller = new OnlineRaceController({
+      seed: 1,
+      difficulty: "normal",
+      playerId: 0,
+      playerName: "HOST",
+      snapshotIntervalTicks: 6,
+      now: () => now,
+      sendSnapshot: async (snapshot) => { sent.push(snapshot); }
+    });
+    controller.beginPlaying();
+    await Promise.resolve();
+    const initialCount = sent.length;
+
+    now = 999;
+    controller.heartbeat();
+    await Promise.resolve();
+    expect(sent).toHaveLength(initialCount);
+    now = 1000;
+    controller.heartbeat();
+    await Promise.resolve();
+    expect(sent).toHaveLength(initialCount + 1);
+    now = 2000;
+    controller.heartbeat();
+    await Promise.resolve();
+    expect(sent).toHaveLength(initialCount + 2);
+  });
+
+  test("keeps connection health active for thirty seconds of heartbeat snapshots", () => {
+    let now = 0;
+    const monitor = new OnlineConnectionMonitor(now);
+    const controller = new OnlineRaceController({
+      seed: 1, difficulty: "normal", playerId: 0, playerName: "HOST",
+      snapshotIntervalTicks: 6, now: () => now,
+      sendSnapshot: async () => { monitor.markPeerActivity(now); }
+    });
+    controller.beginPlaying();
+    for (now = 1000; now <= 30000; now += 1000) {
+      controller.heartbeat();
+      expect(monitor.state(now)).toBe("healthy");
+    }
+  });
+
+  test("reports whether an opponent snapshot was accepted", () => {
+    let now = 1000;
+    const controller = new OnlineRaceController({
+      seed: 1, difficulty: "normal", playerId: 0, playerName: "HOST", round: 2,
+      snapshotIntervalTicks: 6, now: () => now, sendSnapshot: async () => undefined
+    });
+    const state = controller.localSnapshot();
+    const valid = serializeRaceSnapshot(1, "GUEST", now, state, 2, 4);
+    expect(controller.receiveSnapshot(valid)).toBe(true);
+    expect(controller.receiveSnapshot(valid)).toBe(false);
+    expect(controller.receiveSnapshot({ ...valid, playerId: 0, sequence: 5 })).toBe(false);
+    expect(controller.receiveSnapshot({ ...valid, round: 3, sequence: 6 })).toBe(false);
+  });
   test("does not age the remote connection during the five second countdown", () => {
     const sent: unknown[] = [];
     let now = 1000;

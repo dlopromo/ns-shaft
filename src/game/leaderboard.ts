@@ -15,6 +15,11 @@ export interface RankedLeaderboardEntry extends LeaderboardSubmission {
   id: string;
 }
 
+export interface LeaderboardSubmitResult {
+  id: string;
+  submitted: boolean;
+}
+
 export interface LeaderboardDatabasePort {
   ensureAuthenticated(): Promise<string>;
   set(path: string, value: unknown): Promise<void>;
@@ -50,6 +55,14 @@ export function normalizeLeaderboardEntries(
     .slice(0, 5);
 }
 
+export function rankLeaderboardSubmission(
+  entries: RankedLeaderboardEntry[],
+  submissionId: string
+): number | null {
+  const index = entries.findIndex((entry) => entry.id === submissionId);
+  return index < 0 ? null : index + 1;
+}
+
 export class FirebaseLeaderboard {
   constructor(
     private readonly database: LeaderboardDatabasePort,
@@ -57,14 +70,14 @@ export class FirebaseLeaderboard {
     private readonly createId: () => string = () => crypto.randomUUID()
   ) {}
 
-  async submit(input: LeaderboardSubmissionInput): Promise<boolean> {
+  async submit(input: LeaderboardSubmissionInput): Promise<LeaderboardSubmitResult> {
     const pending = this.normalizePending({ ...input, id: this.createId() });
     try {
       await this.write(pending);
-      return true;
+      return { id: pending.id, submitted: true };
     } catch {
       this.savePending([...this.pending().filter((item) => item.id !== pending.id), pending]);
-      return false;
+      return { id: pending.id, submitted: false };
     }
   }
 

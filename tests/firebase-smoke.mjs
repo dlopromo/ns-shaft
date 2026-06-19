@@ -20,9 +20,10 @@ if (errors.length > 0) throw new Error(errors.join(" | "));
 
 async function runRoomFlow(mode) {
   const hostContext = await browser.newContext({
-    permissions: ["clipboard-read", "clipboard-write"]
+    permissions: ["clipboard-read", "clipboard-write"],
+    locale: "ja-JP"
   });
-  const guestContext = await browser.newContext();
+  const guestContext = await browser.newContext({ locale: "ja-JP" });
   const host = await hostContext.newPage();
   const guest = await guestContext.newPage();
   let roomCode = "";

@@ -101,8 +101,9 @@ built from explicit rectangles and separated by transparent padding.
 | Spike floor | `(384,368,96,32)` |
 
 The spring uses all seven native frames. Contact compresses from frame 0 to
-frame 6 over 200ms; the player launches at full compression; frames 5 back to 0
-restore the spring over the following 100ms.
+frame 6 over 100ms; the player launches at full compression; frames 5 back to 0
+restore the spring over the following 100ms. This timing remains a playability
+calibration rather than a frame-exact Windows 1.3J measurement.
 
 Bitmap 103 supplies the monochrome character mask.
 `tools/build_native_sprite_sheet.py` creates a transparent 544 x 400 derivative

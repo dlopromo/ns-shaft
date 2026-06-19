@@ -178,11 +178,11 @@ canvas {
   border: 2px outset #fff;
   color: #000;
 }
-.title-screen::before { width: 340px; height: 300px; }
+.title-screen::before { width: 360px; height: 330px; }
 .title-art {
   position: absolute;
   z-index: 1;
-  top: 84px;
+  top: 88px;
   left: 173px;
   width: 288px;
   height: 140px;
@@ -191,14 +191,27 @@ canvas {
 .main-menu {
   position: absolute;
   z-index: 1;
-  top: 228px;
+  top: 236px;
   display: grid;
   grid-template-columns: repeat(2, 124px);
-  gap: 7px;
+  gap: 5px 7px;
 }
-.main-menu button { font-size: 13px; }
+.main-menu button { height: 27px; padding: 3px 12px; font-size: 13px; }
 .main-menu button[data-open="online"] { grid-column: 1 / -1; }
 .main-menu button:last-child { grid-column: 1 / -1; }
+.title-language {
+  position: absolute;
+  z-index: 1;
+  top: 61px;
+  right: 147px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #000;
+  font-size: 11px;
+  line-height: 22px;
+}
+.title-language select { width: 120px; height: 22px; font-size: 11px; }
 .key-help {
   position: absolute;
   z-index: 1;
@@ -226,8 +239,8 @@ canvas {
 #options-panel .dialog {
   gap: 3px;
   width: 400px;
-  max-height: 420px;
-  padding: 10px 16px;
+  max-height: 340px;
+  padding: 14px 16px;
 }
 #options-panel .dialog h2 {
   margin: 0 0 2px;
@@ -310,6 +323,8 @@ canvas {
   padding-top: 3px;
   border-top: 1px solid #888;
 }
+.sound-dialog { width: 400px; max-height: 360px; padding: 14px 16px; }
+.sound-dialog .sound-preview { border-top: 0; }
 .sound-preview h3 {
   margin: 0;
   font-size: 12px;
@@ -390,7 +405,7 @@ canvas {
 .online-state-dialog h2,
 .online-state-dialog p { margin: 0; text-align: center; }
 .online-state-dialog h2 { font-size: 18px; }
-.online-state-dialog p { min-height: 18px; font-size: 12px; }
+.online-state-dialog p { min-height: 18px; font-size: 12px; white-space: pre-line; }
 .online-connection-indicator {
   position: absolute;
   z-index: 5;
