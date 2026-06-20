@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "$namespace": {
+      "rooms": {
+        "$roomCode": {
+          ".read": "auth != null && $roomCode.matches(/^[0-9]{4,8}$/)",
+          ".write": "auth != null && $roomCode.matches(/^[0-9]{4,8}$/)"
+        }
+      }
+    }
+  }
+}

@@ -300,7 +300,7 @@ Latest mobile foundation: added a full mobile playability plan, shared mobile me
 
 - [x] Add portrait Race layout with opponent thumbnail below local cabinet.
 - [x] Add landscape Race layout with opponent thumbnail in right control column.
-- [ ] Ensure Race results fit mobile dialog.
+- [x] Center Race countdown and results content on the local canvas.
 
 ### Milestone 5 — QA And Regression
 
@@ -309,9 +309,20 @@ Latest mobile foundation: added a full mobile playability plan, shared mobile me
 - [x] Run `npm test -- --run`.
 - [x] Run `npm run build`.
 - [x] Run desktop browser QA.
-- [x] Add dedicated mobile browser QA for 360x640, 390x844, and 844x390.
-- [ ] Run cross-browser desktop QA.
+- [x] Add dedicated mobile browser QA for 360x640, 390x844, 430x932, and 844x390.
+- [x] Preserve the 634:436 Split Race preview ratio and align portrait controls across game modes.
+- [x] Center Race countdown/results overlays on the local 634x436 canvas and switch the mobile shell to charcoal.
+- [x] Run cross-browser desktop QA.
 - [ ] Run Firebase browser emulator / two-client smoke when environment is available.
+
+## Standalone Realtime Sync Library
+
+- [x] Add an independent private TypeScript package under `packages/realtime-room-sync/`.
+- [x] Add generic 2-4 player room, lockstep, checkpoint, heartbeat snapshot, reconnect, pause, results, and rematch APIs.
+- [x] Keep the core free of Firebase, DOM, Canvas, and NS-SHAFT game types.
+- [x] Add a namespaced Firebase RTDB adapter, emulator rules/tests, package lockfile, and integration README.
+- [x] Verify package installation with `npm ci`, 12 core unit tests, and declaration/ESM build.
+- [ ] Run the package Firebase emulator suite after a Java runtime is available.
 
 ## Remaining
 

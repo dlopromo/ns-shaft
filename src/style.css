@@ -634,7 +634,7 @@ canvas {
   body.mobile-active {
     display: block;
     overflow-x: hidden;
-    background: #171717;
+    background: #090a0c;
     touch-action: none;
   }
   body.mobile-active #app { display: block; }
@@ -652,8 +652,8 @@ canvas {
     gap: 12px;
     overflow: visible;
     border-radius: 0 0 28px 28px;
-    background: #c8c3ad;
-    box-shadow: inset 0 -5px 0 #9a9584, 0 8px 30px #000;
+    background: #15171a;
+    box-shadow: inset 0 -5px 0 #090a0c, 0 8px 24px #000;
     touch-action: none;
     -webkit-user-select: none;
     user-select: none;
@@ -666,9 +666,9 @@ canvas {
     transform: none;
     overflow: hidden;
     justify-self: center;
-    border: 5px solid #4b4a57;
+    border: 5px solid #343740;
     border-radius: 8px 8px 22px 8px;
-    background: #4b4a57;
+    background: #343740;
     box-sizing: content-box;
     box-shadow: inset 0 0 0 2px #272631, 0 2px 0 #eee9d4;
   }
@@ -679,6 +679,9 @@ canvas {
     transform-origin: top left;
   }
   .mobile-shell[data-orientation="portrait"] { grid-template-rows: auto auto 1fr; }
+  .mobile-shell[data-orientation="portrait"]:not(.race-active):not(:has(#title-screen:not([hidden]))) .game-frame {
+    margin-bottom: calc(246px * var(--game-scale) - 20px);
+  }
   .mobile-shell .title-screen::before,
   .mobile-shell .title-screen .main-menu,
   .mobile-shell .title-language,
@@ -735,7 +738,7 @@ canvas {
     border-radius: 13px;
     color: #ddd;
     background: #242424;
-    box-shadow: inset 3px 3px 0 #555, inset -4px -4px 0 #080808, 0 4px 0 #777264;
+    box-shadow: inset 2px 2px 0 #454850, inset -3px -3px 0 #080808, 0 3px 0 #050607;
     font-size: 28px;
     font-weight: bold;
     touch-action: none;
@@ -756,7 +759,7 @@ canvas {
     border-radius: 22px;
     color: #fff4fa;
     background: #8b1f4d;
-    box-shadow: inset 2px 2px 0 #c85888, inset -3px -3px 0 #4c0d29, 0 3px 0 #777264;
+    box-shadow: inset 2px 2px 0 #a83b6a, inset -3px -3px 0 #4c0d29, 0 3px 0 #050607;
     font-size: 12px;
     font-weight: bold;
     touch-action: manipulation;
@@ -800,25 +803,30 @@ canvas {
   .mobile-shell.race-active { width: min(100vw, 640px); height: auto; }
   .mobile-shell .race-stage {
     width: calc(634px * var(--game-scale));
-    height: calc(576px * var(--game-scale));
+    height: calc(684px * var(--game-scale));
   }
   .mobile-shell .race-strip {
     position: relative;
     display: flex;
     flex-direction: column;
     width: 634px;
-    height: 576px;
+    height: 684px;
     gap: 8px;
     transform: scale(var(--game-scale));
     transform-origin: top left;
   }
   .mobile-shell .race-pane-remote {
-    grid-template-rows: 20px 92px;
+    grid-template-rows: 20px 218px;
     width: 317px;
     align-self: center;
     pointer-events: none;
   }
-  .mobile-shell .race-pane-remote .race-canvas { width: 317px; height: 92px; }
+  .mobile-shell .race-pane-remote .race-canvas { width: 317px; height: 218px; }
+  .mobile-shell .race-pane-local > .online-state {
+    inset: 20px auto auto 0;
+    width: 634px;
+    height: 436px;
+  }
   .mobile-shell[data-orientation="landscape"] {
     width: 100vw;
     max-width: none;
@@ -874,5 +882,8 @@ canvas {
     top: 0;
     width: 220px;
   }
-  .mobile-shell[data-orientation="landscape"] .race-pane-remote .race-canvas { width: 220px; }
+  .mobile-shell[data-orientation="landscape"] .race-pane-remote .race-canvas {
+    width: 220px;
+    height: calc(220px * 436 / 634);
+  }
 }

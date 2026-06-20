@@ -9,6 +9,7 @@ const browser = await chromium.launch({ headless: true });
 for (const [name, viewport] of Object.entries({
   "portrait-360": { width: 360, height: 640 },
   "portrait-390": { width: 390, height: 844 },
+  "portrait-430": { width: 430, height: 932 },
   "landscape-844": { width: 844, height: 390 }
 })) {
   const context = await browser.newContext({ viewport, isMobile: true, hasTouch: true, locale: "en-US" });
@@ -57,6 +58,9 @@ for (const [name, viewport] of Object.entries({
     const right = box("#mobile-right");
     return {
       state: JSON.parse(window.render_game_to_text()),
+      top: document.querySelector(".mobile-controls").getBoundingClientRect().top,
+      bodyBackground: getComputedStyle(document.body).backgroundColor,
+      shellBackground: getComputedStyle(document.querySelector(".mobile-shell")).backgroundColor,
       left: { left: left.left, width: left.width, height: left.height },
       right: { right: right.right, width: right.width, height: right.height }
     };
@@ -64,6 +68,9 @@ for (const [name, viewport] of Object.entries({
   if (controls.state.mobile.primaryAction !== "pause" || controls.left.left > 32 ||
       viewport.width - controls.right.right > 32 || controls.left.width < 44 || controls.right.width < 44) {
     throw new Error(`${name} controls failed: ${JSON.stringify(controls)}`);
+  }
+  if (controls.bodyBackground !== "rgb(9, 10, 12)" || controls.shellBackground !== "rgb(21, 23, 26)") {
+    throw new Error(`${name} mobile palette failed: ${JSON.stringify(controls)}`);
   }
   await page.screenshot({ path: new URL(`${name}-controls.png`, output).pathname, fullPage: true });
 
@@ -82,13 +89,47 @@ for (const [name, viewport] of Object.entries({
   const race = await page.evaluate(() => {
     const local = document.querySelector(".race-pane-local").getBoundingClientRect();
     const remote = document.querySelector(".race-pane-remote").getBoundingClientRect();
+    const remoteCanvas = document.querySelector(".race-pane-remote .race-canvas").getBoundingClientRect();
+    const controls = document.querySelector(".mobile-controls").getBoundingClientRect();
     return { local: { left: local.left, right: local.right, top: local.top, bottom: local.bottom },
-      remote: { left: remote.left, right: remote.right, top: remote.top, bottom: remote.bottom } };
+      remote: { left: remote.left, right: remote.right, top: remote.top, bottom: remote.bottom },
+      remoteCanvas: { width: remoteCanvas.width, height: remoteCanvas.height },
+      controlsTop: controls.top };
   });
   const raceIsOrdered = viewport.width < viewport.height
     ? race.remote.top >= race.local.bottom
     : race.remote.left >= race.local.right && race.remote.right <= viewport.width;
   if (!raceIsOrdered) throw new Error(`${name} race layout failed: ${JSON.stringify(race)}`);
+  const remoteAspectError = Math.abs(race.remoteCanvas.width / race.remoteCanvas.height - 634 / 436) / (634 / 436);
+  const portraitGeometryFailed = viewport.width < viewport.height &&
+    (race.remote.bottom > race.controlsTop || Math.abs(race.controlsTop - controls.top) > 2);
+  if (remoteAspectError >= 0.005 || race.remote.bottom > viewport.height || portraitGeometryFailed) {
+    throw new Error(`${name} race geometry failed: ${JSON.stringify({ race, controls, remoteAspectError })}`);
+  }
+
+  await page.evaluate(() => window.__nsShaftQa.setOnlineRoundPhase("countdown", 2000));
+  await page.waitForFunction(() => document.querySelector(".online-state")?.dataset.countdown === "true");
+  const countdown = await page.evaluate(() => {
+    const canvas = document.querySelector(".race-pane-local .race-canvas").getBoundingClientRect();
+    const dialog = document.querySelector(".race-pane-local .online-state-dialog").getBoundingClientRect();
+    const center = (rect) => ({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+    return { canvas: center(canvas), dialog: center(dialog) };
+  });
+  if (Math.abs(countdown.canvas.x - countdown.dialog.x) > 2 || Math.abs(countdown.canvas.y - countdown.dialog.y) > 2) {
+    throw new Error(`${name} countdown center failed: ${JSON.stringify(countdown)}`);
+  }
+
+  await page.evaluate(() => window.__nsShaftQa.setOnlineRoundPhase("results", 2000));
+  await page.waitForFunction(() => !document.querySelector(".race-pane-local .online-state")?.hidden);
+  const results = await page.evaluate(() => {
+    const canvas = document.querySelector(".race-pane-local .race-canvas").getBoundingClientRect();
+    const dialog = document.querySelector(".race-pane-local .online-state-dialog").getBoundingClientRect();
+    const center = (rect) => ({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+    return { canvas: center(canvas), dialog: center(dialog) };
+  });
+  if (Math.abs(results.canvas.x - results.dialog.x) > 2 || Math.abs(results.canvas.y - results.dialog.y) > 2) {
+    throw new Error(`${name} results center failed: ${JSON.stringify(results)}`);
+  }
   await page.locator("#mobile-abort").click();
   await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).ui === "title");
 
@@ -110,4 +151,4 @@ for (const [name, viewport] of Object.entries({
 }
 
 await browser.close();
-console.log("Mobile browser QA passed: 360x640, 390x844, 844x390");
+console.log("Mobile browser QA passed: 360x640, 390x844, 430x932, 844x390");
