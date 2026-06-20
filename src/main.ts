@@ -1,8 +1,15 @@
 import "./style.css";
 import { AUDIO_EFFECTS, GameAudio, type EffectName } from "./game/audio";
-import { KeyboardInput } from "./game/input";
+import { CombinedInput, KeyboardInput, TouchInput } from "./game/input";
 import { Renderer } from "./game/renderer";
 import { integerScaleForViewport } from "./game/layout";
+import {
+  MOBILE_MEDIA_QUERY,
+  mobileOrientationForViewport,
+  mobilePrimaryAction,
+  mobileScaleForViewport,
+  type MobilePrimaryAction
+} from "./game/mobile";
 import { GameSimulation } from "./game/simulation";
 import { loadSave, SAVE_KEY } from "./game/storage";
 import { setLocale, t, type TranslationKey } from "./game/i18n";
@@ -121,7 +128,7 @@ const soundPreviewRows = AUDIO_EFFECTS.map((effect) => `
 `).join("");
 
 root.innerHTML = `
-  <main class="cabinet">
+  <main id="mobile-shell" class="cabinet mobile-shell">
     <section class="game-frame" aria-label="NS-SHAFT 1.3J">
       <canvas id="game" aria-label="NS-SHAFT game canvas"></canvas>
       <button id="pause-control" class="frame-control pause-control" aria-label="${t("common.pause")}" data-i18n-aria="common.pause"></button>
@@ -314,6 +321,29 @@ root.innerHTML = `
         </article>
       </div>
     </section>
+    <nav id="mobile-title-menu" class="mobile-title-menu" aria-label="${t("mobile.menuAria")}" data-i18n-aria="mobile.menuAria">
+      <label class="mobile-language"><span data-i18n="options.language">${t("options.language")}</span>
+        <select id="mobile-locale" aria-label="${t("options.language")}" data-i18n-aria="options.language">
+          <option value="ja" data-i18n="options.japanese">${t("options.japanese")}</option>
+          <option value="zh-Hant" data-i18n="options.traditionalChinese">${t("options.traditionalChinese")}</option>
+          <option value="en" data-i18n="options.english">${t("options.english")}</option>
+        </select>
+      </label>
+      <button data-start="1" data-i18n="menu.onePlayer">${t("menu.onePlayer")}</button>
+      <button data-open="online" data-i18n="menu.online">${t("menu.online")}</button>
+      <button data-open="records" data-i18n="menu.records">${t("menu.records")}</button>
+      <button data-open="options" data-i18n="menu.options">${t("menu.options")}</button>
+      <button data-open="about" data-i18n="menu.about">${t("menu.about")}</button>
+    </nav>
+    <nav id="mobile-controls" class="mobile-controls" aria-label="${t("mobile.controlsAria")}" data-i18n-aria="mobile.controlsAria">
+      <button id="mobile-left" type="button" class="mobile-direction mobile-left" aria-label="${t("mobile.left")}" data-i18n-aria="mobile.left">◀</button>
+      <div class="mobile-actions">
+        <button id="mobile-primary" type="button">${t("common.pause")}</button>
+        <button id="mobile-abort" type="button" data-i18n="common.abort">${t("common.abort")}</button>
+        <button id="mobile-fullscreen" type="button" data-i18n="mobile.fullscreen">${t("mobile.fullscreen")}</button>
+      </div>
+      <button id="mobile-right" type="button" class="mobile-direction mobile-right" aria-label="${t("mobile.right")}" data-i18n-aria="mobile.right">▶</button>
+    </nav>
   </main>`;
 
 const canvas = document.querySelector<HTMLCanvasElement>("#game")!;
@@ -378,6 +408,16 @@ const renderer = new Renderer(canvas);
 const raceLocalRenderer = new Renderer(raceLocalCanvas);
 const raceRemoteRenderer = new Renderer(raceRemoteCanvas);
 const keyboard = new KeyboardInput();
+const touchInput = new TouchInput();
+const input = new CombinedInput(keyboard, touchInput);
+const mobileControls = document.querySelector<HTMLElement>("#mobile-controls")!;
+const mobileLeft = document.querySelector<HTMLButtonElement>("#mobile-left")!;
+const mobileRight = document.querySelector<HTMLButtonElement>("#mobile-right")!;
+const mobilePrimary = document.querySelector<HTMLButtonElement>("#mobile-primary")!;
+const mobileAbort = document.querySelector<HTMLButtonElement>("#mobile-abort")!;
+const mobileFullscreen = document.querySelector<HTMLButtonElement>("#mobile-fullscreen")!;
+const mobileLocale = document.querySelector<HTMLSelectElement>("#mobile-locale")!;
+const mobileMatcher = window.matchMedia(MOBILE_MEDIA_QUERY);
 const audio = new GameAudio();
 let save: SaveData = loadSave(localStorage.getItem(SAVE_KEY), navigator.languages);
 setLocale(save.settings.locale);
@@ -408,11 +448,40 @@ let submittedOnlineRound = -1;
 let accumulator = 0;
 let lastTime = performance.now();
 let scoreHandled = false;
+let mobileControlsVisible = false;
+let mobileDirectionsDisabled = false;
+let currentMobilePrimaryAction: MobilePrimaryAction = "disabled";
 const STEP_MS = 1000 / 60;
 const onlineConnectionMonitor = new OnlineConnectionMonitor(performance.now());
+const syncMobileControls = () => {
+  mobileControlsVisible = isMobileActive() && panelIsOpen() === false && Boolean(game || onlineGame || onlineRace);
+  const mode = (game ?? onlineGame)?.snapshot().mode ?? onlineRace?.localSnapshot().mode;
+  const overlayOwnsFlow = onlinePhase === "countdown" || onlinePhase === "results" || Boolean(onlineRoomData?.meta?.pause);
+  currentMobilePrimaryAction = mobilePrimaryAction(mode, overlayOwnsFlow);
+  mobileDirectionsDisabled = overlayOwnsFlow || mode === "paused" || mode === "gameover";
+  if (mobileDirectionsDisabled) touchInput.clear();
+  mobileControls.hidden = mobileControlsVisible === false;
+  mobileControls.dataset.disabled = String(mobileDirectionsDisabled);
+  mobileLeft.disabled = mobileDirectionsDisabled;
+  mobileRight.disabled = mobileDirectionsDisabled;
+  mobilePrimary.disabled = currentMobilePrimaryAction === "disabled";
+  mobilePrimary.textContent = t(`common.${currentMobilePrimaryAction === "disabled" ? "pause" : currentMobilePrimaryAction}` as TranslationKey);
+  mobileAbort.disabled = !mobileControlsVisible;
+  mobileFullscreen.hidden = !document.fullscreenEnabled;
+  cabinet.dataset.orientation = currentMobileOrientation();
+  document.body.classList.toggle("mobile-active", isMobileActive());
+};
 const qaMode = new URLSearchParams(location.search).get("qa") === "1";
 pauseControl.hidden = true;
 abortControl.hidden = true;
+mobileControls.hidden = true;
+
+const isMobileActive = () => mobileMatcher.matches;
+const currentMobileOrientation = () => mobileOrientationForViewport(window.innerWidth, window.innerHeight);
+
+function panelIsOpen(): boolean {
+  return title.hidden === false || optionsPanel.hidden === false || soundPanel.hidden === false || recordsPanel.hidden === false || onlinePanel.hidden === false || aboutPanel.hidden === false;
+}
 
 function persist(): void {
   localStorage.setItem(SAVE_KEY, JSON.stringify(save));
@@ -459,6 +528,7 @@ function onlineServerNow(): number {
 function applySettingsToControls(): void {
   difficulty.value = save.settings.difficulty;
   locale.value = save.settings.locale;
+  mobileLocale.value = save.settings.locale;
   player1Name.value = save.playerNames[0];
   player2Name.value = save.playerNames[1];
   for (const key of ["conveyor", "spring", "rotating", "music", "sound", "fast"] as const) {
@@ -470,6 +540,7 @@ function applySettingsToControls(): void {
 function applyLocaleToDocument(): void {
   setLocale(save.settings.locale);
   document.documentElement.lang = save.settings.locale;
+  mobileLocale.value = save.settings.locale;
   document.querySelectorAll<HTMLElement>("[data-i18n]").forEach((element) => {
     element.textContent = t(element.dataset.i18n as TranslationKey);
   });
@@ -646,10 +717,11 @@ function frame(now: number): void {
   accumulator += Math.min(100, now - lastTime);
   lastTime = now;
   while (accumulator >= STEP_MS) {
-    update(keyboard.read(), STEP_MS);
+    update(input.read(), STEP_MS);
     accumulator -= STEP_MS;
   }
   if (onlineRoom?.role === "host") void driveOnlineRoundLifecycle();
+  syncMobileControls();
   requestAnimationFrame(frame);
 }
 
@@ -1494,6 +1566,45 @@ function drawRaceStatus(): void {
     : `${onlinePlayerDisplay(opponentId)} · ${t("online.connection.syncing")}`;
 }
 
+function bindMobileDirection(button: HTMLButtonElement, direction: "left" | "right"): void {
+  button.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    touchInput.setPointer(event.pointerId, direction);
+    try {
+      button.setPointerCapture(event.pointerId);
+    } catch {
+      // Synthetic QA events and some interrupted mobile gestures may not be capturable.
+    }
+  });
+  button.addEventListener("pointerup", (event) => touchInput.releasePointer(event.pointerId));
+  button.addEventListener("pointercancel", (event) => touchInput.releasePointer(event.pointerId));
+  button.addEventListener("lostpointercapture", (event) => touchInput.releasePointer(event.pointerId));
+}
+
+bindMobileDirection(mobileLeft, "left");
+bindMobileDirection(mobileRight, "right");
+mobilePrimary.addEventListener("click", () => {
+  if (currentMobilePrimaryAction === "retry") void start(1);
+  if (currentMobilePrimaryAction === "pause" || currentMobilePrimaryAction === "resume") {
+    void togglePause();
+  }
+});
+mobileAbort.addEventListener("click", () => {
+  audio.playEffect("abort");
+  showTitle();
+});
+mobileFullscreen.addEventListener("click", () => {
+  if (document.fullscreenElement) void document.exitFullscreen();
+  else void cabinet.requestFullscreen();
+});
+window.addEventListener("blur", () => touchInput.clear());
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") touchInput.clear();
+});
+mobileControls.addEventListener("contextmenu", (event) => event.preventDefault());
+mobileControls.addEventListener("touchmove", (event) => event.preventDefault(), { passive: false });
+
+
 document.querySelectorAll<HTMLButtonElement>("[data-start]").forEach((button) => {
   button.addEventListener("click", () => void start(Number(button.dataset.start) as 1 | 2));
 });
@@ -1569,6 +1680,12 @@ difficulty.addEventListener("change", () => {
 });
 locale.addEventListener("change", () => {
   save.settings.locale = locale.value as SaveData["settings"]["locale"];
+  persist();
+  applyLocaleToDocument();
+});
+mobileLocale.addEventListener("change", () => {
+  save.settings.locale = mobileLocale.value as SaveData["settings"]["locale"];
+  locale.value = save.settings.locale;
   persist();
   applyLocaleToDocument();
 });
@@ -1748,7 +1865,9 @@ window.addEventListener("blur", () => {
 });
 
 function updateFullscreenScale(): void {
-  const scale = String(integerScaleForViewport(window.innerWidth, window.innerHeight));
+  const desktopScale = integerScaleForViewport(window.innerWidth, window.innerHeight);
+  const activeMobileScale = mobileScaleForViewport(window.innerWidth, window.innerHeight);
+  const scale = String(isMobileActive() ? activeMobileScale : desktopScale);
   const raceScale = String(Math.min(
     1,
     Math.max(0.25, (window.innerWidth - 16) / 967),
@@ -1758,6 +1877,7 @@ function updateFullscreenScale(): void {
   cabinet.style.setProperty("--race-scale", raceScale);
   gameFrame.style.setProperty("--game-scale", scale);
   raceStage.style.setProperty("--race-scale", raceScale);
+  syncMobileControls();
 }
 window.addEventListener("resize", updateFullscreenScale);
 document.addEventListener("fullscreenchange", updateFullscreenScale);
@@ -1798,7 +1918,17 @@ window.render_game_to_text = () => JSON.stringify({
     status: onlineRace.status()
   } : null,
   settings: { ...save.settings },
-  audio: { music: save.settings.music, sound: save.settings.sound, ...audio.status() }
+  audio: { music: save.settings.music, sound: save.settings.sound, ...audio.status() },
+  mobile: {
+    active: isMobileActive(),
+    orientation: currentMobileOrientation(),
+    controlsVisible: mobileControlsVisible,
+    directionsDisabled: mobileDirectionsDisabled,
+    direction: touchInput.peekDirection() === "none" ? "neutral" : touchInput.peekDirection(),
+    primaryAction: currentMobilePrimaryAction,
+    abortAvailable: mobileControlsVisible,
+    fullscreenAvailable: Boolean(document.fullscreenEnabled)
+  }
 });
 window.advanceTime = (ms: number) => {
   const idle: InputFrame = {

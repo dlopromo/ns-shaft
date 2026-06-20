@@ -626,3 +626,253 @@ canvas {
   box-sizing: content-box;
   image-rendering: pixelated;
 }
+.mobile-title-menu,
+.mobile-controls { display: none; }
+.mobile-controls[hidden] { display: none; }
+@media (pointer: coarse) and (max-width: 1024px) {
+  html, body, #app { width: 100%; min-height: 100dvh; overscroll-behavior: none; }
+  body.mobile-active {
+    display: block;
+    overflow-x: hidden;
+    background: #171717;
+    touch-action: none;
+  }
+  body.mobile-active #app { display: block; }
+  .mobile-shell {
+    --mobile-safe-bottom: env(safe-area-inset-bottom, 0px);
+    width: min(100vw, 640px);
+    height: auto;
+    min-height: 100dvh;
+    margin: 0 auto;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 8px calc(18px + var(--mobile-safe-bottom));
+    display: grid;
+    justify-items: center;
+    align-items: start;
+    align-content: start;
+    gap: 12px;
+    overflow: visible;
+    border-radius: 0 0 28px 28px;
+    background: #c8c3ad;
+    box-shadow: inset 0 -5px 0 #9a9584, 0 8px 30px #000;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .mobile-shell .game-frame {
+    width: calc(634px * var(--game-scale));
+    height: calc(436px * var(--game-scale));
+    padding: 5px;
+    transform: none;
+    overflow: hidden;
+    justify-self: center;
+    border: 5px solid #4b4a57;
+    border-radius: 8px 8px 22px 8px;
+    background: #4b4a57;
+    box-sizing: content-box;
+    box-shadow: inset 0 0 0 2px #272631, 0 2px 0 #eee9d4;
+  }
+  .mobile-shell .game-frame > canvas,
+  .mobile-shell .game-frame > .screen,
+  .mobile-shell .game-frame > .online-state {
+    transform: scale(var(--game-scale));
+    transform-origin: top left;
+  }
+  .mobile-shell[data-orientation="portrait"] { grid-template-rows: auto auto 1fr; }
+  .mobile-shell .title-screen::before,
+  .mobile-shell .title-screen .main-menu,
+  .mobile-shell .title-language,
+  .mobile-shell .key-help { display: none; }
+  .mobile-title-menu {
+    display: none;
+    width: min(calc(100vw - 24px), 560px);
+    max-width: calc(100vw - 24px);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    padding: 2px 8px 8px;
+    touch-action: manipulation;
+  }
+  .mobile-shell:has(#title-screen:not([hidden])) .mobile-title-menu { display: grid; }
+  .mobile-title-menu button {
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 10px;
+    overflow: hidden;
+    font-size: 14px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .mobile-language {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    color: #242424;
+    font-size: 12px;
+  }
+  .mobile-language select { width: 132px; min-height: 32px; }
+  .mobile-title-menu button[data-start="1"],
+  .mobile-title-menu button[data-open="online"],
+  .mobile-title-menu button[data-open="about"] { grid-column: 1 / -1; }
+  .mobile-controls:not([hidden]) {
+    position: relative;
+    z-index: 10;
+    display: grid;
+    grid-template-columns: 76px minmax(130px, 1fr) 76px;
+    gap: clamp(12px, 6vw, 30px);
+    width: min(calc(100vw - 24px), 560px);
+    max-width: calc(100vw - 24px);
+    align-items: center;
+    align-self: end;
+    touch-action: none;
+  }
+  .mobile-direction {
+    width: 76px;
+    height: 76px;
+    padding: 0;
+    border: 0;
+    border-radius: 13px;
+    color: #ddd;
+    background: #242424;
+    box-shadow: inset 3px 3px 0 #555, inset -4px -4px 0 #080808, 0 4px 0 #777264;
+    font-size: 28px;
+    font-weight: bold;
+    touch-action: none;
+  }
+  .mobile-left { justify-self: start; }
+  .mobile-right { justify-self: end; }
+  .mobile-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    align-items: center;
+  }
+  .mobile-actions button {
+    min-width: 0;
+    min-height: 44px;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 22px;
+    color: #fff4fa;
+    background: #8b1f4d;
+    box-shadow: inset 2px 2px 0 #c85888, inset -3px -3px 0 #4c0d29, 0 3px 0 #777264;
+    font-size: 12px;
+    font-weight: bold;
+    touch-action: manipulation;
+  }
+  .mobile-actions #mobile-fullscreen {
+    grid-column: 1 / -1;
+    min-height: 30px;
+    color: #eee;
+    background: #4b4a57;
+    border-radius: 5px;
+    font-size: 10px;
+  }
+  .mobile-controls[data-disabled="true"] .mobile-direction { opacity: .45; }
+  .mobile-shell .dialog-screen:not([hidden]),
+  .mobile-shell .records-screen:not([hidden]),
+  .mobile-shell .about-screen:not([hidden]) {
+    position: fixed;
+    z-index: 20;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    transform: none;
+    background: #c8c3ad;
+    place-items: start center;
+    touch-action: pan-y;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .mobile-shell .dialog,
+  .mobile-shell .records-content {
+    position: relative;
+    inset: auto;
+    width: min(100%, 560px);
+    height: auto;
+    max-height: none;
+    margin: 0;
+  }
+  .mobile-shell .about-screen img { margin-top: 24px; }
+  .mobile-shell.race-active { width: min(100vw, 640px); height: auto; }
+  .mobile-shell .race-stage {
+    width: calc(634px * var(--game-scale));
+    height: calc(576px * var(--game-scale));
+  }
+  .mobile-shell .race-strip {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 634px;
+    height: 576px;
+    gap: 8px;
+    transform: scale(var(--game-scale));
+    transform-origin: top left;
+  }
+  .mobile-shell .race-pane-remote {
+    grid-template-rows: 20px 92px;
+    width: 317px;
+    align-self: center;
+    pointer-events: none;
+  }
+  .mobile-shell .race-pane-remote .race-canvas { width: 317px; height: 92px; }
+  .mobile-shell[data-orientation="landscape"] {
+    width: 100vw;
+    max-width: none;
+    min-height: 100dvh;
+    grid-template-columns: 88px auto minmax(140px, 180px);
+    grid-template-rows: 1fr;
+    gap: 8px;
+    align-content: center;
+    padding: max(6px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) max(6px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+    border-radius: 0;
+  }
+  .mobile-shell[data-orientation="landscape"] .game-frame,
+  .mobile-shell[data-orientation="landscape"] .race-stage { grid-column: 2; grid-row: 1; }
+  .mobile-shell[data-orientation="landscape"] .mobile-controls:not([hidden]) { display: contents; }
+  .mobile-shell[data-orientation="landscape"] .mobile-left {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+  }
+  .mobile-shell[data-orientation="landscape"] .mobile-right {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: end;
+    justify-self: end;
+  }
+  .mobile-shell[data-orientation="landscape"] .mobile-actions {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: start;
+    width: 100%;
+    margin-top: 8px;
+  }
+  .mobile-shell[data-orientation="landscape"] .mobile-title-menu {
+    grid-column: 3;
+    grid-row: 1;
+    width: 100%;
+    align-self: center;
+  }
+  .mobile-shell[data-orientation="landscape"] .mobile-language,
+  .mobile-shell[data-orientation="landscape"] .mobile-title-menu button { grid-column: 1 / -1; }
+  .mobile-shell[data-orientation="landscape"] .mobile-language {
+    display: block;
+  }
+  .mobile-shell[data-orientation="landscape"] .mobile-language span { display: none; }
+  .mobile-shell[data-orientation="landscape"] .mobile-language select { width: 100%; }
+  .mobile-shell[data-orientation="landscape"] .race-stage {
+    width: calc(634px * var(--game-scale));
+    height: calc(436px * var(--game-scale));
+  }
+  .mobile-shell[data-orientation="landscape"] .race-pane-remote {
+    position: fixed;
+    left: calc(100% + 18px);
+    top: 0;
+    width: 220px;
+  }
+  .mobile-shell[data-orientation="landscape"] .race-pane-remote .race-canvas { width: 220px; }
+}

@@ -3,6 +3,7 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
 Latest: ONLINE 2P lobby now uses one three-locale layout: three-cell room header, native radio groups for mode/difficulty, a 2x2 mechanism grid, no duplicated in-room room-code/status rows, and full-frame start/resume countdown overlays.
 Latest polish: room-rule and outer labels now share an 11px/13px rhythm, radio/checkbox controls are vertically centered, player status no longer steals HOST/GUEST label width, and lobby row spacing is compact.
 Latest online flow: lobby mode/difficulty use compact dropdowns, online difficulty defaults to Normal, COPY is replaced by a host-only START after the guest joins, and both Ready states wait for an explicit host start. The three room status cells are larger, transient messages no longer reserve space, and results use structured score/place/Best 5/countdown rows.
+Latest mobile foundation: added a full mobile playability plan, shared mobile media/scale helpers, pointer-based touch input merged with keyboard input, Game Boy-style mobile controls, anti-zoom viewport/CSS, mobile QA state, and mobile input/layout unit tests while preserving desktop geometry.
 
 ## Progress
 
@@ -264,6 +265,53 @@ Latest online flow: lobby mode/difficulty use compact dropdowns, online difficul
   conveyor, spring and rotating floors. Guests see the synchronized values,
   either player's Ready state locks editing, and online rounds now use room
   meta exclusively while the external Options panel is explicitly local-only.
+
+## Mobile Playability Progress
+
+### Milestone 1 — Mobile Foundation
+
+- [x] Add shared `MOBILE_MEDIA_QUERY`.
+- [x] Add mobile shell CSS.
+- [x] Add viewport anti-zoom meta.
+- [x] Add touch input state.
+- [x] Add separated LEFT / RIGHT controls and state-aware PAUSE / RESUME / RETRY / ABORT actions.
+- [x] Wire Pointer Events.
+- [x] Clear touch input on cancel / blur / visibilitychange.
+- [x] Add mobile scale calculation.
+- [x] Keep PC integer scale unchanged for desktop.
+- [x] Hide mobile controls on desktop.
+- [x] Verify Local 1P foundation with unit, build, and desktop browser QA.
+
+### Milestone 2 — Mobile Menus And Dialogs
+
+- [x] Add mobile external title menu.
+- [x] Duplicate and synchronize the language selector in the mobile menu area.
+- [x] Hide Local 2P entry on mobile.
+- [x] Add full-page mobile Options, Best 5, About, and Online lobby dialogs.
+- [ ] Ensure soft keyboard does not hide name / room code inputs.
+
+### Milestone 3 — Mobile Online Co-op
+
+- [ ] Verify host and guest touch input in real Online Co-op.
+- [ ] Add fullscreen action to Online Pause Dialog.
+- [ ] Ensure Ready / START and Results layout work on mobile.
+
+### Milestone 4 — Mobile Split Race
+
+- [x] Add portrait Race layout with opponent thumbnail below local cabinet.
+- [x] Add landscape Race layout with opponent thumbnail in right control column.
+- [ ] Ensure Race results fit mobile dialog.
+
+### Milestone 5 — QA And Regression
+
+- [x] Add mobile input unit tests.
+- [x] Add mobile layout tests.
+- [x] Run `npm test -- --run`.
+- [x] Run `npm run build`.
+- [x] Run desktop browser QA.
+- [x] Add dedicated mobile browser QA for 360x640, 390x844, and 844x390.
+- [ ] Run cross-browser desktop QA.
+- [ ] Run Firebase browser emulator / two-client smoke when environment is available.
 
 ## Remaining
 

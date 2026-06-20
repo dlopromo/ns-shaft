@@ -21,9 +21,17 @@ if (errors.length > 0) throw new Error(errors.join(" | "));
 async function runRoomFlow(mode) {
   const hostContext = await browser.newContext({
     permissions: ["clipboard-read", "clipboard-write"],
-    locale: "ja-JP"
+    locale: "ja-JP",
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true
   });
-  const guestContext = await browser.newContext({ locale: "ja-JP" });
+  const guestContext = await browser.newContext({
+    locale: "ja-JP",
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true
+  });
   const host = await hostContext.newPage();
   const guest = await guestContext.newPage();
   let roomCode = "";
@@ -189,7 +197,7 @@ async function runRoomFlow(mode) {
       });
     }
 
-    const pauseButton = mode === "race" ? "#race-pause" : "#pause-control";
+    const pauseButton = "#mobile-primary";
     await host.locator(pauseButton).waitFor({ state: "visible" });
     await host.locator(pauseButton).click();
     await Promise.all([
@@ -262,7 +270,7 @@ async function runRoomFlow(mode) {
     };
   } finally {
     if (roomCode) await host.evaluate(() => {
-      const visibleAbort = [...document.querySelectorAll("#abort-control, #race-abort")]
+      const visibleAbort = [...document.querySelectorAll("#mobile-abort, #abort-control, #race-abort")]
         .find((element) => !element.hidden);
       if (visibleAbort instanceof HTMLElement) visibleAbort.click();
       else document.querySelector("#online-panel [data-close]")?.click();

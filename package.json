@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "test:browser": "node tests/browser-qa.mjs",
+    "test:mobile": "node tests/mobile-browser-qa.mjs",
     "test:cross-browser": "node tests/cross-browser.mjs",
     "test:firebase": "node tests/firebase-smoke.mjs",
     "test:firebase-rules": "firebase emulators:exec --project demo-ns-shaft --only database \"node --test tests/firebase-rules.test.mjs\"",
