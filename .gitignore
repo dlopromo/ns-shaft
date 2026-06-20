@@ -16,3 +16,4 @@ vite.config.d.ts
 .firebase/
 database-debug.log
 firebase-debug.log
+.worktrees/
