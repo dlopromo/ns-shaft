@@ -55,7 +55,7 @@ describe("online round lifecycle", () => {
     })).toBeNull();
     expect(nextOnlineHostAction({
       phase: "lobby", bothReady: true, roundFinished: false, now: 1000
-    })).toBe("begin-countdown");
+    })).toBeNull();
     expect(nextOnlineHostAction({
       phase: "countdown", bothReady: true, roundFinished: false,
       now: 5999, countdownEndsAt: 6000

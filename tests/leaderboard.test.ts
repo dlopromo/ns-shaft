@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import * as leaderboardModule from "../src/game/leaderboard";
 import {
   FirebaseLeaderboard,
   leaderboardPath,
@@ -32,6 +33,34 @@ class FakeLeaderboardDatabase implements LeaderboardDatabasePort {
 }
 
 describe("global leaderboard", () => {
+  test("builds five fixed-width rows without merging two-player names", () => {
+    const buildRows = (leaderboardModule as unknown as {
+      buildLeaderboardRows: (
+        mode: "coop",
+        entries: Array<{ id: string; uid: string; player1: string; player2?: string; floor: number; createdAt: number }>
+      ) => Array<Record<string, unknown>>;
+    }).buildLeaderboardRows;
+    const rows = buildRows("coop", [{
+      id: "one", uid: "uid", player1: "PLAYER123", player2: "GUEST999", floor: 42, createdAt: 1
+    }]);
+
+    expect(rows).toHaveLength(5);
+    expect(rows[0]).toEqual({
+      rank: 1,
+      player1: "PLAYER12",
+      player2: "GUEST999",
+      floor: 42,
+      layoutMode: "coop"
+    });
+    expect(rows[1]).toEqual({
+      rank: 2,
+      player1: "--------",
+      player2: "--------",
+      floor: 0,
+      layoutMode: "coop"
+    });
+  });
+
   test("uses the namespaced mode and difficulty path", () => {
     expect(leaderboardPath("coop", "hard")).toBe("ns-shaft/leaderboards/coop/hard");
   });

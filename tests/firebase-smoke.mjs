@@ -41,10 +41,10 @@ async function runRoomFlow(mode) {
       guest.goto(baseUrl, { waitUntil: "networkidle" })
     ]);
     await openOnline(host, `HOST-${mode.toUpperCase()}-QA`);
-    await host.locator("#online-mode").selectOption("coop");
     await host.getByRole("button", { name: "部屋を作る" }).click();
     await host.waitForFunction(() => /^\d{4}$/.test(document.querySelector("#online-code")?.value ?? ""));
     roomCode = await host.locator("#online-code").inputValue();
+    await host.getByRole("button", { name: "コードをコピー" }).click();
     assert(await host.evaluate(() => navigator.clipboard.readText()) === roomCode,
       `${mode}: created room code was not copied`);
 
@@ -65,16 +65,37 @@ async function runRoomFlow(mode) {
     };
     assert(lobbyState.hostGuest === "connected" && lobbyState.guestHost === "connected",
       `${mode}: lobby did not connect: ${JSON.stringify(lobbyState)}`);
-    await host.locator("#online-mode").selectOption(mode);
+    await host.locator("#online-room-mode").selectOption(mode);
+    await host.locator("#online-difficulty").selectOption("hard");
+    await host.locator("#online-conveyor").uncheck();
+    await host.locator("#online-spring").check();
+    await host.locator("#online-rotating").uncheck();
+    await host.locator("#online-fast").check();
     await Promise.all([
       host.waitForFunction((expected) => JSON.parse(window.render_game_to_text()).online?.mode === expected, mode),
-      guest.waitForFunction((expected) => JSON.parse(window.render_game_to_text()).online?.mode === expected, mode)
+      guest.waitForFunction((expected) => JSON.parse(window.render_game_to_text()).online?.mode === expected, mode),
+      guest.waitForFunction(() => {
+        return document.querySelector("#online-difficulty")?.value === "hard" &&
+          !document.querySelector("#online-conveyor")?.checked &&
+          document.querySelector("#online-spring")?.checked &&
+          !document.querySelector("#online-rotating")?.checked &&
+          document.querySelector("#online-fast")?.checked;
+      })
     ]);
+    assert(await guest.locator("#online-difficulty").isDisabled() &&
+      await guest.locator("#online-fast").isDisabled() &&
+      await guest.locator("#online-room-mode").isDisabled(),
+      `${mode}: guest could edit shared room settings`);
 
     await Promise.all([
       host.getByRole("button", { name: "準備完了", exact: true }).click(),
       guest.getByRole("button", { name: "準備完了", exact: true }).click()
     ]);
+    await host.waitForFunction(() => !document.querySelector("#online-start")?.disabled);
+    assert((await gameState(host)).online.phase === "lobby" &&
+      await guest.locator("#online-start").isDisabled(),
+    `${mode}: ready state auto-started or guest START was enabled`);
+    await host.getByRole("button", { name: "開始", exact: true }).click();
     await Promise.all([
       waitForOnlinePhase(host, "countdown"),
       waitForOnlinePhase(guest, "countdown")
@@ -214,6 +235,8 @@ async function runRoomFlow(mode) {
       host.getByRole("button", { name: "準備完了", exact: true }).click(),
       guest.getByRole("button", { name: "準備完了", exact: true }).click()
     ]);
+    await host.waitForFunction(() => !document.querySelector("#online-start")?.disabled);
+    await host.getByRole("button", { name: "開始", exact: true }).click();
     await Promise.all([
       host.waitForFunction(() => {
         const state = JSON.parse(window.render_game_to_text());

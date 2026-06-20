@@ -15,6 +15,35 @@ export interface RankedLeaderboardEntry extends LeaderboardSubmission {
   id: string;
 }
 
+export interface LeaderboardRow {
+  rank: number;
+  player1: string;
+  player2?: string;
+  floor: number;
+  layoutMode: "single" | "coop";
+}
+
+export function buildLeaderboardRows(
+  mode: LeaderboardMode,
+  entries: RankedLeaderboardEntry[]
+): LeaderboardRow[] {
+  const paired = mode === "coop" || mode === "local2p";
+  return Array.from({ length: 5 }, (_, index) => {
+    const entry = entries[index];
+    return {
+      rank: index + 1,
+      player1: entry ? normalizePlayerName(entry.player1, "--------") : "--------",
+      ...(paired ? {
+        player2: entry?.player2
+          ? normalizePlayerName(entry.player2, "--------")
+          : "--------"
+      } : {}),
+      floor: entry?.floor ?? 0,
+      layoutMode: paired ? "coop" : "single"
+    };
+  });
+}
+
 export interface LeaderboardSubmitResult {
   id: string;
   submitted: boolean;

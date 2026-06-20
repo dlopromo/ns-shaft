@@ -73,4 +73,45 @@ describe("Windows 1.3J native layout", () => {
     expect(css).toMatch(/\.title-language select\s*\{[^}]*width:\s*120px;[^}]*height:\s*22px;/s);
     expect(css).toMatch(/\.title-art\s*\{[^}]*width:\s*288px;[^}]*height:\s*140px;/s);
   });
+
+  test("keeps BEST 5 centered with fixed record columns", () => {
+    const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.records-content\s*\{[^}]*width:\s*390px;[^}]*margin:\s*58px 0 0 37px;/s);
+    expect(css).toMatch(/\.record-row\s*\{[^}]*grid-template-columns:\s*18px minmax\(0, 1fr\) 58px;/s);
+    expect(css).toMatch(/\.record-player\s*\{[^}]*font-variant-numeric:\s*tabular-nums;/s);
+  });
+
+  test("uses one stable online lobby layout for every locale", () => {
+    const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
+    const main = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+    expect(css).toMatch(/\.online-room-header\s*\{[^}]*grid-template-columns:\s*repeat\(3,/s);
+    expect(css).toMatch(/\.online-room-settings\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s);
+    expect(css).not.toMatch(/html\[lang="(?:en|zh-Hant)"\] \.online-room-settings/);
+    expect(main.match(/<span data-online-header/g)).toHaveLength(3);
+    expect(main).toContain('<select id="online-room-mode">');
+    expect(main).toContain('<select id="online-difficulty">');
+    expect(main).toContain('<option value="normal" selected');
+    expect(main).toContain('id="online-start"');
+    expect(main).toContain('id="online-status" hidden');
+  });
+
+  test("renders online results as structured Windows-style rows", () => {
+    const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
+    const main = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+    expect(main).toContain('id="online-result"');
+    expect(main).toContain('data-result="score"');
+    expect(main).toContain('data-result="placement"');
+    expect(main).toContain('data-result="rank"');
+    expect(main).toContain('data-result="next"');
+    expect(css).toMatch(/\.online-result-score\s*\{[^}]*background:\s*#ffe28a;/s);
+    expect(css).toMatch(/\.online-result-row\[data-success="true"\]\s*\{[^}]*background:\s*#9ce3a5;/s);
+  });
+
+  test("renders start and resume countdowns as a full-screen overlay", () => {
+    const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
+    const main = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+    expect(css).toMatch(/\.online-state\[data-countdown="true"\] \.online-state-dialog\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
+    expect(css).toMatch(/\.online-state\[data-countdown="true"\] h2\s*\{[^}]*font-size:\s*96px;/s);
+    expect(main).toContain('onlineState.dataset.countdown = String(options.countdown === true)');
+  });
 });

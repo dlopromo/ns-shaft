@@ -20,12 +20,38 @@ export interface OnlineMechanismOptions {
   fast: boolean;
 }
 
-export interface CreateRoomOptions {
-  playerName: string;
-  seed: number;
+export interface OnlineRoomSettings {
   difficulty: Difficulty;
   mode: OnlineRoomMode;
   options: OnlineMechanismOptions;
+}
+
+export const DEFAULT_ONLINE_ROOM_SETTINGS: OnlineRoomSettings = {
+  difficulty: "normal",
+  mode: "coop",
+  options: { conveyor: true, spring: true, rotating: true, fast: false }
+};
+
+export function normalizeOnlineRoomSettings(
+  value?: Partial<Omit<OnlineRoomSettings, "options">> & {
+    options?: Partial<OnlineMechanismOptions>;
+  }
+): OnlineRoomSettings {
+  return {
+    difficulty: value?.difficulty ?? DEFAULT_ONLINE_ROOM_SETTINGS.difficulty,
+    mode: value?.mode ?? DEFAULT_ONLINE_ROOM_SETTINGS.mode,
+    options: {
+      conveyor: value?.options?.conveyor ?? DEFAULT_ONLINE_ROOM_SETTINGS.options.conveyor,
+      spring: value?.options?.spring ?? DEFAULT_ONLINE_ROOM_SETTINGS.options.spring,
+      rotating: value?.options?.rotating ?? DEFAULT_ONLINE_ROOM_SETTINGS.options.rotating,
+      fast: value?.options?.fast ?? DEFAULT_ONLINE_ROOM_SETTINGS.options.fast
+    }
+  };
+}
+
+export interface CreateRoomOptions extends OnlineRoomSettings {
+  playerName: string;
+  seed: number;
   roomCode?: string;
 }
 

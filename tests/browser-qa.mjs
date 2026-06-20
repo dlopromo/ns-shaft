@@ -80,45 +80,147 @@ if (titlePanelSpacing.top < 12 || titlePanelSpacing.top > 45 ||
 await page.getByRole("button", { name: "オンライン2P" }).click();
 state = await capture("01b-online-panel");
 if (state.ui !== "online") throw new Error(`Online panel failed: ${state.ui}`);
-const onlineModes = await page.locator("#online-mode option").allTextContents();
+const onlineModes = await page.locator("#online-room-mode option").allTextContents();
 if (JSON.stringify(onlineModes) !== JSON.stringify(["協力プレイ", "対戦プレイ"])) {
   throw new Error(`Online modes are incomplete: ${JSON.stringify(onlineModes)}`);
+}
+const preRoomAudit = await page.evaluate(() => ({
+  nameDisabled: document.querySelector("#online-name").disabled,
+  codeVisible: !document.querySelector("#online-code").closest("label").hidden,
+  createVisible: !document.querySelector("#online-create").hidden,
+  joinVisible: !document.querySelector("#online-join").hidden,
+  copyVisible: !document.querySelector("#online-copy").hidden,
+  readyVisible: !document.querySelector("#online-ready").hidden,
+  startVisible: !document.querySelector("#online-start").hidden,
+  playersVisible: !document.querySelector("#online-players").hidden,
+  settingsVisible: !document.querySelector("#online-room-settings").hidden
+}));
+if (preRoomAudit.nameDisabled || !preRoomAudit.codeVisible || !preRoomAudit.createVisible ||
+    !preRoomAudit.joinVisible || preRoomAudit.copyVisible || preRoomAudit.readyVisible ||
+    preRoomAudit.startVisible || preRoomAudit.playersVisible || preRoomAudit.settingsVisible) {
+  throw new Error(`Pre-room online panel is not minimal: ${JSON.stringify(preRoomAudit)}`);
 }
 await page.evaluate(() => window.__nsShaftQa.showOnlineLobby({
   0: { connected: true, ready: true, name: "HOST" },
   1: { connected: true, ready: false, name: "GUEST" }
-}, 1));
+}, 1, {
+  difficulty: "hard",
+  mode: "race",
+  options: { conveyor: true, spring: false, rotating: true, fast: false }
+}));
 const lobbyAudit = await page.evaluate(() => {
   const host = document.querySelector('[data-player="0"]');
   const guest = document.querySelector('[data-player="1"]');
   const ready = document.querySelector("#online-ready");
+  const header = document.querySelector(".online-room-header");
   const dialog = document.querySelector(".online-dialog");
   const screen = document.querySelector("#online-panel");
   return {
     hostStatus: host.dataset.status,
     hostText: host.querySelector("strong").textContent,
+    hostRole: host.querySelector("[data-online-role]").textContent,
     hostBackground: getComputedStyle(host).backgroundColor,
     guestStatus: guest.dataset.status,
     guestText: guest.querySelector("strong").textContent,
+    guestRole: guest.querySelector("[data-online-role]").textContent,
     guestBackground: getComputedStyle(guest).backgroundColor,
+    guestLocal: guest.dataset.local,
+    hostLocal: host.dataset.local,
+    guestTag: guest.querySelector("[data-online-you]")?.textContent ?? "",
+    hostTag: host.querySelector("[data-online-you]")?.textContent ?? "",
     readyState: ready.dataset.state,
     readyDisabled: ready.disabled,
     readyBackground: getComputedStyle(ready).backgroundColor,
+    copyVisible: !document.querySelector("#online-copy").hidden,
     copyDisabled: document.querySelector("#online-copy").disabled,
+    startVisible: !document.querySelector("#online-start").hidden,
+    startDisabled: document.querySelector("#online-start").disabled,
+    roomSettingsVisible: !document.querySelector("#online-room-settings").hidden,
+    roomSettingsDisabled: document.querySelector("#online-room-settings").disabled,
+    roomDifficulty: document.querySelector("#online-difficulty")?.value,
+    roomMode: document.querySelector("#online-room-mode")?.value,
+    springEnabled: document.querySelector("#online-spring").checked,
+    statusVisible: getComputedStyle(document.querySelector("#online-status")).display !== "none",
+    codeInputVisible: getComputedStyle(document.querySelector("#online-code-label")).display !== "none",
+    headerCells: Array.from(header.querySelectorAll("[data-online-header]")).map((node) => node.textContent.trim()),
     dialogContained: dialog.getBoundingClientRect().top >= screen.getBoundingClientRect().top &&
       dialog.getBoundingClientRect().bottom <= screen.getBoundingClientRect().bottom
   };
 });
 if (lobbyAudit.hostStatus !== "ready" || lobbyAudit.hostText !== "準備完了" ||
+    lobbyAudit.hostRole !== "1P" ||
     lobbyAudit.hostBackground !== "rgb(156, 227, 165)" ||
+    lobbyAudit.guestRole !== "2P" ||
     lobbyAudit.guestStatus !== "connected" || lobbyAudit.guestText !== "接続済み" ||
     lobbyAudit.guestBackground !== "rgb(255, 226, 138)" ||
+    lobbyAudit.guestLocal !== "true" || lobbyAudit.hostLocal !== "false" ||
+    lobbyAudit.guestTag !== "YOU" || lobbyAudit.hostTag !== "" ||
     lobbyAudit.readyState !== "available" || lobbyAudit.readyDisabled ||
     lobbyAudit.readyBackground !== "rgb(255, 226, 138)" ||
-    !lobbyAudit.copyDisabled || !lobbyAudit.dialogContained) {
+    lobbyAudit.copyVisible || !lobbyAudit.copyDisabled || !lobbyAudit.startVisible ||
+    !lobbyAudit.startDisabled || !lobbyAudit.roomSettingsVisible ||
+    !lobbyAudit.roomSettingsDisabled || lobbyAudit.roomDifficulty !== "hard" ||
+    lobbyAudit.roomMode !== "race" || lobbyAudit.springEnabled ||
+    lobbyAudit.statusVisible || lobbyAudit.codeInputVisible ||
+    JSON.stringify(lobbyAudit.headerCells) !== JSON.stringify(["ROOM 1234", "PLAYERS 2/2", "READY WAITING"]) ||
+    !lobbyAudit.dialogContained) {
   throw new Error(`Online lobby styling failed: ${JSON.stringify(lobbyAudit)}`);
 }
 await capture("01c-online-lobby-ready");
+await page.evaluate(() => window.__nsShaftQa.showOnlineLobby({
+  0: { connected: true, ready: false, name: "HOST" },
+  1: { connected: true, ready: false, name: "GUEST" }
+}, 0, {
+  difficulty: "easy",
+  mode: "coop",
+  options: { conveyor: false, spring: true, rotating: false, fast: true }
+}));
+const hostSettingsAudit = await page.evaluate(() => ({
+  disabled: document.querySelector("#online-room-settings").disabled,
+  difficulty: document.querySelector("#online-difficulty")?.value,
+  conveyor: document.querySelector("#online-conveyor").checked,
+  fast: document.querySelector("#online-fast").checked,
+  copyVisible: !document.querySelector("#online-copy").hidden,
+  startVisible: !document.querySelector("#online-start").hidden,
+  startDisabled: document.querySelector("#online-start").disabled,
+  localTag: document.querySelector('[data-player="0"] [data-online-you]')?.textContent ?? "",
+  localRole: document.querySelector('[data-player="0"]').querySelector("[data-online-role]").textContent
+}));
+if (hostSettingsAudit.disabled || hostSettingsAudit.difficulty !== "easy" ||
+    hostSettingsAudit.conveyor || !hostSettingsAudit.fast ||
+    hostSettingsAudit.copyVisible || !hostSettingsAudit.startVisible ||
+    !hostSettingsAudit.startDisabled || hostSettingsAudit.localTag !== "YOU" ||
+    hostSettingsAudit.localRole !== "1P") {
+  throw new Error(`Host room settings are not editable: ${JSON.stringify(hostSettingsAudit)}`);
+}
+await capture("01d-online-lobby-host");
+for (const language of ["ja", "zh-Hant", "en"]) {
+  await page.locator("#locale").evaluate((select, value) => {
+    select.value = value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }, language);
+  const localeLayout = await page.locator("#online-room-settings").evaluate((settings) => ({
+    overflow: settings.scrollWidth > settings.clientWidth || settings.scrollHeight > settings.clientHeight,
+    labelsOverflow: Array.from(settings.querySelectorAll("label")).some((label) =>
+      label.scrollWidth > label.clientWidth || label.scrollHeight > label.clientHeight),
+    sameFontSize: getComputedStyle(settings.querySelector("label")).fontSize ===
+      getComputedStyle(document.querySelector("#online-name").closest("label")).fontSize,
+    selectsFit: Array.from(settings.querySelectorAll("select")).every((select) =>
+      select.scrollWidth <= select.clientWidth && select.getBoundingClientRect().height === 22),
+    compactHeight: settings.getBoundingClientRect().height <= 135,
+    hostLabelClipped: document.querySelector('[data-player="0"] small').scrollWidth >
+      document.querySelector('[data-player="0"] small').clientWidth
+  }));
+  if (localeLayout.overflow || localeLayout.labelsOverflow || !localeLayout.sameFontSize ||
+      !localeLayout.selectsFit || !localeLayout.compactHeight || localeLayout.hostLabelClipped) {
+    throw new Error(`${language} online settings overflowed: ${JSON.stringify(localeLayout)}`);
+  }
+  await capture(`01d-online-lobby-${language}`);
+}
+await page.locator("#locale").evaluate((select) => {
+  select.value = "ja";
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+});
 await page.getByRole("button", { name: "戻る" }).click();
 
 await page.locator("#locale").selectOption("zh-Hant");
@@ -178,8 +280,40 @@ if (await page.locator("#player1-name").inputValue() !== "ALICELON") {
 await page.getByRole("button", { name: "戻る" }).click();
 
 await page.getByRole("button", { name: "ベスト５" }).click();
+await page.waitForFunction(() => document.querySelectorAll("#records-list .record-row").length === 15);
 state = await capture("03-records");
 if (state.ui !== "records") throw new Error(`Records screen failed: ${state.ui}`);
+const recordsAudit = await page.evaluate(() => {
+  const screen = document.querySelector("#records-panel").getBoundingClientRect();
+  const content = document.querySelector(".records-content").getBoundingClientRect();
+  const rows = [...document.querySelectorAll("#records-list .record-row")];
+  return {
+    playfieldCentered: Math.abs((content.left + content.width / 2) - (screen.left + 232)) <= 1,
+    contained: content.top >= screen.top && content.bottom <= screen.bottom,
+    rows: rows.length,
+    overflow: rows.some((row) => row.scrollWidth > row.clientWidth)
+  };
+});
+if (!recordsAudit.playfieldCentered || !recordsAudit.contained ||
+    recordsAudit.rows !== 15 || recordsAudit.overflow) {
+  throw new Error(`BEST 5 layout failed: ${JSON.stringify(recordsAudit)}`);
+}
+await page.locator('[data-record-mode="coop"]').click();
+await page.waitForFunction(() =>
+  document.querySelector('[data-record-mode="coop"]')?.dataset.active === "true" &&
+  document.querySelector('#records-list .record-row')?.dataset.layout === "coop"
+);
+const coopRecordsAudit = await page.locator("#records-list").evaluate((list) => ({
+  rows: list.querySelectorAll(".record-row[data-layout=coop]").length,
+  maxNames: Math.max(...[...list.querySelectorAll(".record-player")]
+    .map((player) => player.children.length)),
+  overflow: [...list.querySelectorAll(".record-row")]
+    .some((row) => row.scrollWidth > row.clientWidth)
+}));
+if (coopRecordsAudit.rows !== 15 || coopRecordsAudit.maxNames !== 2 || coopRecordsAudit.overflow) {
+  throw new Error(`Co-op BEST 5 layout failed: ${JSON.stringify(coopRecordsAudit)}`);
+}
+await capture("03b-records-coop");
 await page.getByRole("button", { name: "戻る" }).click();
 
 await page.getByRole("button", { name: "１人プレイ" }).click();
@@ -747,6 +881,22 @@ if (state.online?.phase !== "countdown" || state.ticks !== countdownTicks ||
     !state.online?.display?.includes("5")) {
   throw new Error(`Online countdown did not freeze at 5: ${JSON.stringify(state.online)}`);
 }
+const startCountdownLayout = await page.locator("#online-state").evaluate((overlay) => {
+  const dialog = overlay.querySelector(".online-state-dialog").getBoundingClientRect();
+  const bounds = overlay.getBoundingClientRect();
+  return {
+    countdown: overlay.dataset.countdown,
+    width: Math.round(dialog.width),
+    height: Math.round(dialog.height),
+    boundsWidth: Math.round(bounds.width),
+    boundsHeight: Math.round(bounds.height)
+  };
+});
+if (startCountdownLayout.countdown !== "true" ||
+    startCountdownLayout.width !== startCountdownLayout.boundsWidth ||
+    startCountdownLayout.height !== startCountdownLayout.boundsHeight) {
+  throw new Error(`Start countdown is not full-screen: ${JSON.stringify(startCountdownLayout)}`);
+}
 await page.evaluate(() => window.__nsShaftQa.setOnlineRoundPhase("playing", -1000));
 state = await capture("13-online-split-race");
 if (state.ui !== "race" || state.race?.local?.players?.length !== 1) {
@@ -801,7 +951,11 @@ await page.evaluate(() => window.__nsShaftQa.setOnlinePause({
   resumeAt: Date.now() + 3000
 }));
 state = await capture("13ab-online-resume-countdown");
-if (state.online?.dialog?.title !== "3") {
+const resumeCountdownFullScreen = await page.locator("#online-state").evaluate((overlay) =>
+  overlay.dataset.countdown === "true" &&
+  overlay.querySelector(".online-state-dialog").getBoundingClientRect().width === overlay.getBoundingClientRect().width
+);
+if (state.online?.dialog?.title !== "3" || !resumeCountdownFullScreen) {
   throw new Error(`Online resume countdown is invalid: ${JSON.stringify(state.online?.dialog)}`);
 }
 await page.evaluate(() => window.__nsShaftQa.setOnlinePause(null));
@@ -888,9 +1042,17 @@ if (responsiveRaceGeometry.width > 900 ||
 await page.evaluate(() => window.__nsShaftQa.setOnlineRoundPhase("results", 5000));
 await page.evaluate(() => window.__nsShaftQa.setOnlineResultRank(2));
 state = await capture("13c-online-results");
-if (state.online?.phase !== "results" || !state.online?.display ||
-    !state.online?.dialog?.detail?.includes("BEST 5 第2位") ||
-    !state.online?.dialog?.detail?.includes("部屋に戻るまで 5")) {
+const resultLayout = await page.locator("#online-result").evaluate((result) => ({
+  visible: !result.hidden,
+  score: result.querySelector('[data-result="score"]')?.textContent,
+  rank: result.querySelector('[data-result="rank"]')?.textContent,
+  next: result.querySelector('[data-result="next"]')?.textContent,
+  rankBackground: getComputedStyle(result.querySelector('[data-result="rank"]')).backgroundColor
+}));
+if (state.online?.phase !== "results" || !state.online?.display || !resultLayout.visible ||
+    !resultLayout.rank?.includes("BEST 5 第2位") ||
+    !resultLayout.next?.includes("部屋に戻るまで 5") ||
+    resultLayout.rankBackground !== "rgb(156, 227, 165)") {
   throw new Error(`Online results overlay is missing: ${JSON.stringify(state.online)}`);
 }
 await page.evaluate(() => window.__nsShaftQa.setOnlineRoundPhase("lobby"));

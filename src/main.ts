@@ -8,10 +8,10 @@ import { loadSave, SAVE_KEY } from "./game/storage";
 import { setLocale, t, type TranslationKey } from "./game/i18n";
 import { normalizePlayerName } from "./game/player-name";
 import {
+  buildLeaderboardRows,
   FirebaseLeaderboard,
   rankLeaderboardSubmission,
-  type LeaderboardMode,
-  type RankedLeaderboardEntry
+  type LeaderboardMode
 } from "./game/leaderboard";
 import { OnlineGameController } from "./game/online/controller";
 import {
@@ -51,8 +51,11 @@ import {
 } from "./game/online/round";
 import {
   FirebaseOnlineSession,
+  normalizeOnlineRoomSettings,
+  type OnlineMechanismOptions,
   type OnlineRoomHandle,
-  type OnlineRoomMode
+  type OnlineRoomMode,
+  type OnlineRoomSettings
 } from "./game/online/session";
 import {
   DEFAULT_BUFFER_TICKS,
@@ -65,7 +68,7 @@ import type { Difficulty, GameStateSnapshot, InputFrame, SaveData } from "./game
 interface OnlineRoomMeta {
   seed?: number;
   difficulty?: Difficulty;
-  options?: SaveData["settings"];
+  options?: OnlineMechanismOptions;
   mode?: OnlineRoomMode;
   phase?: OnlineRoomPhase;
   round?: number;
@@ -98,7 +101,8 @@ declare global {
       setOnlineResultRank: (rank: number) => void;
       showOnlineLobby: (
         players: LobbyRoomData["players"],
-        localPlayerId?: 0 | 1
+        localPlayerId?: 0 | 1,
+        meta?: LobbyRoomData["meta"]
       ) => void;
     };
   }
@@ -145,6 +149,7 @@ root.innerHTML = `
       <section id="options-panel" class="screen dialog-screen" hidden>
         <div class="dialog">
           <h2 data-i18n="options.title">${t("options.title")}</h2>
+          <p class="local-options-note" data-i18n="options.localOnly">${t("options.localOnly")}</p>
           <label><span data-i18n="options.difficulty">${t("options.difficulty")}</span>
             <select id="difficulty">
               <option value="easy" data-i18n="options.easy">${t("options.easy")}</option>
@@ -196,32 +201,73 @@ root.innerHTML = `
       <section id="online-panel" class="screen dialog-screen" hidden>
         <div class="dialog online-dialog">
           <h2 data-i18n="online.title">${t("online.title")}</h2>
-          <p id="online-status">${t("online.description")}</p>
-          <label><span data-i18n="online.mode.label">${t("online.mode.label")}</span>
-            <select id="online-mode">
-              <option value="coop" data-i18n="online.mode.coop">${t("online.mode.coop")}</option>
-              <option value="race" data-i18n="online.mode.race">${t("online.mode.race")}</option>
-            </select>
-          </label>
+          <section class="online-room-header" hidden>
+            <span data-online-header></span>
+            <span data-online-header></span>
+            <span data-online-header></span>
+          </section>
+          <p id="online-status" hidden></p>
           <label><span data-i18n="online.name">${t("online.name")}</span> <input id="online-name" autocomplete="off" value="PLAYER1"></label>
           <section id="online-players" class="online-players" aria-label="${t("online.playersAria")}" data-i18n-aria="online.playersAria" hidden>
-            <div class="online-player" data-player="0" data-status="waiting">
-              <span data-i18n="online.host">${t("online.host")}</span><b>---</b><strong>${t("online.waiting")}</strong>
+            <div class="online-player" data-player="0" data-status="waiting" data-local="false">
+              <span class="online-player-avatar online-player-avatar-yellow" style="background-image:url('${assetUrl("assets/web/sprites-native.png")}')"></span>
+              <div class="online-player-meta">
+                <div class="online-player-top">
+                  <span data-online-role>1P</span>
+                  <small data-i18n="online.host">${t("online.host")}</small>
+                  <em data-online-you hidden>${t("online.you")}</em>
+                </div>
+                <b>---</b>
+              </div>
+              <strong>${t("online.waiting")}</strong>
             </div>
-            <div class="online-player" data-player="1" data-status="waiting">
-              <span data-i18n="online.guest">${t("online.guest")}</span><b>---</b><strong>${t("online.waiting")}</strong>
+            <div class="online-player" data-player="1" data-status="waiting" data-local="false">
+              <span class="online-player-avatar online-player-avatar-green" style="background-image:url('${assetUrl("assets/web/sprites-native.png")}')"></span>
+              <div class="online-player-meta">
+                <div class="online-player-top">
+                  <span data-online-role>2P</span>
+                  <small data-i18n="online.guest">${t("online.guest")}</small>
+                  <em data-online-you hidden>${t("online.you")}</em>
+                </div>
+                <b>---</b>
+              </div>
+              <strong>${t("online.waiting")}</strong>
             </div>
           </section>
+          <fieldset id="online-room-settings" class="online-room-settings" hidden>
+            <legend data-i18n="online.settings.title">${t("online.settings.title")}</legend>
+            <div class="online-setting-group">
+              <b data-i18n="online.mode.label">${t("online.mode.label")}</b>
+              <select id="online-room-mode">
+                <option value="coop" data-i18n="online.mode.coop">${t("online.mode.coop")}</option>
+                <option value="race" data-i18n="online.mode.race">${t("online.mode.race")}</option>
+              </select>
+            </div>
+            <div class="online-setting-group">
+              <b data-i18n="options.difficulty">${t("options.difficulty")}</b>
+              <select id="online-difficulty">
+                <option value="easy" data-i18n="options.easy">${t("options.easy")}</option>
+                <option value="normal" selected data-i18n="options.normal">${t("options.normal")}</option>
+                <option value="hard" data-i18n="options.hard">${t("options.hard")}</option>
+              </select>
+            </div>
+            <div class="online-mechanisms">
+              <label><input id="online-conveyor" type="checkbox"> <span data-i18n="options.conveyor">${t("options.conveyor")}</span></label>
+              <label><input id="online-spring" type="checkbox"> <span data-i18n="options.spring">${t("options.spring")}</span></label>
+              <label><input id="online-rotating" type="checkbox"> <span data-i18n="options.rotating">${t("options.rotating")}</span></label>
+              <label><input id="online-fast" type="checkbox"> <span data-i18n="options.fast">${t("options.fast")}</span></label>
+            </div>
+            <small id="online-settings-note" data-i18n="online.settings.hostOnly">${t("online.settings.hostOnly")}</small>
+          </fieldset>
           <div class="dialog-actions">
             <button id="online-create" type="button" data-i18n="online.room.create">${t("online.room.create")}</button>
-            <button id="online-ready" type="button" data-state="available" data-i18n="online.ready" disabled>${t("online.ready")}</button>
-          </div>
-          <label><span data-i18n="online.room.code">${t("online.room.code")}</span> <input id="online-code" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label>
-          <div class="dialog-actions">
             <button id="online-join" type="button" data-i18n="online.room.join">${t("online.room.join")}</button>
-            <button id="online-copy" type="button" data-i18n="online.room.copy" disabled>${t("online.room.copy")}</button>
+            <button id="online-copy" type="button" data-i18n="online.room.copy" disabled hidden>${t("online.room.copy")}</button>
+            <button id="online-ready" type="button" data-state="available" data-i18n="online.ready" disabled hidden>${t("online.ready")}</button>
+            <button id="online-start" type="button" data-i18n="online.start" disabled hidden>${t("online.start")}</button>
             <button data-close type="button" data-i18n="online.back">${t("online.back")}</button>
           </div>
+          <label id="online-code-label"><span data-i18n="online.room.code">${t("online.room.code")}</span> <input id="online-code" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label>
         </div>
       </section>
 
@@ -234,6 +280,12 @@ root.innerHTML = `
         <div class="online-state-dialog">
           <h2 id="online-state-title"></h2>
           <p id="online-state-detail"></p>
+          <div id="online-result" class="online-result" hidden>
+            <strong class="online-result-score" data-result="score"></strong>
+            <div class="online-result-row" data-result="placement"></div>
+            <div class="online-result-row" data-result="rank"></div>
+            <small data-result="next"></small>
+          </div>
           <div id="online-pause-players" class="online-pause-players" hidden>
             <span>1P</span><strong data-pause-player="0">${t("online.waiting")}</strong>
             <span>2P</span><strong data-pause-player="1">${t("online.waiting")}</strong>
@@ -278,19 +330,35 @@ const aboutPanel = document.querySelector<HTMLElement>("#about-panel")!;
 const difficulty = document.querySelector<HTMLSelectElement>("#difficulty")!;
 const locale = document.querySelector<HTMLSelectElement>("#locale")!;
 const onlineStatus = document.querySelector<HTMLElement>("#online-status")!;
-const onlineMode = document.querySelector<HTMLSelectElement>("#online-mode")!;
+const onlineRoomHeader = document.querySelector<HTMLElement>(".online-room-header")!;
+const onlineHeaderCells = Array.from(
+  document.querySelectorAll<HTMLElement>("[data-online-header]")
+);
 const onlineName = document.querySelector<HTMLInputElement>("#online-name")!;
 const onlineCode = document.querySelector<HTMLInputElement>("#online-code")!;
+const onlineCodeLabel = document.querySelector<HTMLElement>("#online-code-label")!;
 const onlineCreate = document.querySelector<HTMLButtonElement>("#online-create")!;
 const onlineJoin = document.querySelector<HTMLButtonElement>("#online-join")!;
 const onlineReady = document.querySelector<HTMLButtonElement>("#online-ready")!;
+const onlineStart = document.querySelector<HTMLButtonElement>("#online-start")!;
 const onlineCopy = document.querySelector<HTMLButtonElement>("#online-copy")!;
 const onlinePlayers = document.querySelector<HTMLElement>("#online-players")!;
+const onlineRoomSettings = document.querySelector<HTMLFieldSetElement>("#online-room-settings")!;
+const onlineRoomMode = document.querySelector<HTMLSelectElement>("#online-room-mode")!;
+const onlineDifficulty = document.querySelector<HTMLSelectElement>("#online-difficulty")!;
+const onlineSettingsNote = document.querySelector<HTMLElement>("#online-settings-note")!;
+const onlineMechanismControls = Object.fromEntries(
+  (["conveyor", "spring", "rotating", "fast"] as const).map((key) => [
+    key,
+    document.querySelector<HTMLInputElement>(`#online-${key}`)!
+  ])
+) as Record<keyof OnlineMechanismOptions, HTMLInputElement>;
 const pauseControl = document.querySelector<HTMLButtonElement>("#pause-control")!;
 const abortControl = document.querySelector<HTMLButtonElement>("#abort-control")!;
 const onlineState = document.querySelector<HTMLElement>("#online-state")!;
 const onlineStateTitle = document.querySelector<HTMLElement>("#online-state-title")!;
 const onlineStateDetail = document.querySelector<HTMLElement>("#online-state-detail")!;
+const onlineResult = document.querySelector<HTMLElement>("#online-result")!;
 const onlinePausePlayers = document.querySelector<HTMLElement>("#online-pause-players")!;
 const onlineStateActions = document.querySelector<HTMLElement>("#online-state-actions")!;
 const onlineStateReady = document.querySelector<HTMLButtonElement>("#online-state-ready")!;
@@ -378,8 +446,10 @@ function syncRendererSettings(): void {
     recordFloor
   };
   renderer.configure(settings);
-  raceLocalRenderer.configure(settings);
-  raceRemoteRenderer.configure({ ...settings, playerColorOverride: "green" });
+  const localRaceColor = onlineRoom?.playerId === 1 ? "green" : "yellow";
+  const remoteRaceColor = localRaceColor === "yellow" ? "green" : "yellow";
+  raceLocalRenderer.configure({ ...settings, playerColorOverride: localRaceColor });
+  raceRemoteRenderer.configure({ ...settings, playerColorOverride: remoteRaceColor });
 }
 
 function onlineServerNow(): number {
@@ -408,6 +478,7 @@ function applyLocaleToDocument(): void {
   });
   if (!onlineRoom && !onlinePanel.hidden) setOnlineStatus(t("online.description"));
   if (onlineRoomData && onlineRoom) renderOnlineLobby(onlineRoomData, onlineRoom.playerId);
+  if (onlineRace) updateRaceLocalLabel();
   renderOnlineStateDialog();
   drawRaceStatus();
   if (!recordsPanel.hidden) void renderRecords();
@@ -605,11 +676,16 @@ async function renderRecords(): Promise<void> {
     }
   }));
   document.querySelector("#records-list")!.innerHTML = levels.map((level, levelIndex) => `
-    <section><h3>${names[level]}</h3><ol>${Array.from({ length: 5 }, (_, index) => {
-      const entry: RankedLeaderboardEntry | undefined = results[levelIndex][index];
-      const players = entry ? [entry.player1, entry.player2].filter(Boolean).join(" / ") : "--------";
-      return `<li><span>${players}</span><b>${t("records.floor", { floor: entry?.floor ?? 0 })}</b></li>`;
-    }).join("")}</ol></section>`).join("");
+    <section class="record-level"><h3>${names[level]}</h3><ol>${
+      buildLeaderboardRows(selectedRecordMode, results[levelIndex]).map((row) => `
+        <li class="record-row" data-layout="${row.layoutMode}">
+          <span class="record-rank">${row.rank}.</span>
+          <span class="record-player"><span>${row.player1}</span>${
+            row.player2 ? `<span>${row.player2}</span>` : ""
+          }</span>
+          <b>${t("records.floor", { floor: row.floor })}</b>
+        </li>`).join("")
+    }</ol></section>`).join("");
 }
 
 function getOnlineSession(): FirebaseOnlineSession {
@@ -624,6 +700,7 @@ function setOnlineStatus(
 ): void {
   onlineStatus.textContent = message;
   onlineStatus.dataset.tone = tone;
+  onlineStatus.hidden = tone === "neutral";
 }
 
 function onlineErrorMessage(error: unknown): string {
@@ -639,64 +716,106 @@ function onlineErrorMessage(error: unknown): string {
   return t("online.error.network");
 }
 
-function enterOnlineRoom(role: "host" | "guest"): void {
+function enterOnlineRoom(_role: "host" | "guest"): void {
+  onlineStatus.hidden = true;
+  onlineRoomHeader.hidden = false;
   onlineCreate.hidden = true;
   onlineJoin.hidden = true;
-  onlineCode.closest("label")!.hidden = true;
+  onlineCodeLabel.hidden = true;
   onlineName.disabled = true;
   onlinePlayers.hidden = false;
+  onlineRoomSettings.hidden = false;
+  onlineReady.hidden = false;
   onlineReady.disabled = true;
   onlineReady.dataset.state = "available";
   onlineReady.textContent = t("online.ready");
-  // ponytail: host can change mode, guest sees it read-only
-  const modeLabel = onlineMode.closest("label")!;
-  modeLabel.hidden = false;
-  if (role === "host") {
-    onlineMode.disabled = false;
-    onlineCopy.hidden = false;
-    onlineCopy.disabled = false;
-  } else {
-    onlineMode.disabled = true;
-    onlineCopy.hidden = true;
-    onlineCopy.disabled = true;
-  }
+  onlineStart.hidden = true;
+  onlineStart.disabled = true;
 }
 
 function exitOnlineRoom(): void {
+  onlineStatus.hidden = true;
   onlineCode.classList.remove("error");
+  onlineRoomHeader.hidden = true;
   onlineCreate.hidden = false;
   onlineCreate.disabled = false;
   onlineJoin.hidden = false;
   onlineJoin.disabled = false;
-  onlineCode.closest("label")!.hidden = false;
+  onlineCodeLabel.hidden = false;
   onlineCode.readOnly = false;
-  onlineMode.closest("label")!.hidden = false;
-  onlineMode.disabled = false;
   onlineName.disabled = false;
-  onlineCopy.hidden = false;
+  onlineCopy.hidden = true;
   onlineCopy.disabled = true;
   onlinePlayers.hidden = true;
+  onlineRoomSettings.hidden = true;
+  onlineReady.hidden = true;
   onlineReady.disabled = true;
   onlineReady.dataset.state = "available";
   onlineReady.textContent = t("online.ready");
+  onlineStart.hidden = true;
+  onlineStart.disabled = true;
 }
 
 function renderOnlineLobby(room: LobbyRoomData, localPlayerId: 0 | 1): void {
-  const view = buildLobbyView(room, localPlayerId);
+  const view = buildLobbyView(room, localPlayerId, onlineRoom?.roomCode ?? "----");
+  syncRendererSettings();
+  onlineRoomHeader.hidden = false;
+  onlineHeaderCells[0].textContent = `${t("online.header.room")} ${view.header.roomCode}`;
+  onlineHeaderCells[1].textContent = `${t("online.header.players")} ${view.header.playerCount}`;
+  onlineHeaderCells[2].textContent = `${t("online.header.ready")} ${t(
+    `online.header.ready.${view.header.readyState === "STARTING" ? "starting" : "waiting"}` as TranslationKey
+  )}`;
+  onlineStatus.hidden = true;
   onlinePlayers.hidden = false;
   for (const player of view.players) {
     const row = onlinePlayers.querySelector<HTMLElement>(`[data-player="${player.playerId}"]`)!;
     row.dataset.status = player.status;
-    row.querySelector("span")!.textContent = t(player.playerId === 0 ? "online.host" : "online.guest");
+    row.dataset.local = String(player.isLocalPlayer);
+    row.querySelector<HTMLElement>("[data-online-role]")!.textContent = player.playerId === 0 ? "1P" : "2P";
+    row.querySelector<HTMLElement>("small")!.textContent = t(player.playerId === 0 ? "online.host" : "online.guest");
     row.querySelector("b")!.textContent = player.name;
     row.querySelector("strong")!.textContent = t(
       player.status === "ready" ? "online.ready" :
         player.status === "connected" ? "online.connected" : "online.waiting"
     );
+    const tag = row.querySelector<HTMLElement>("[data-online-you]")!;
+    tag.hidden = !player.isLocalPlayer;
+    tag.textContent = player.isLocalPlayer ? t("online.you") : "";
   }
+  onlineCopy.hidden = !view.actions.showCopy;
+  onlineCopy.disabled = !view.actions.showCopy;
+  onlineReady.hidden = !view.actions.showReady;
+  onlineStart.hidden = !view.actions.showStart;
+  onlineStart.disabled = view.startButton.disabled;
+  onlineCodeLabel.hidden = !view.actions.showCodeInput;
+  onlineCreate.hidden = !view.actions.showCreate;
+  onlineJoin.hidden = !view.actions.showJoin;
+  onlineRoomSettings.hidden = !view.actions.showSettings;
   onlineReady.dataset.state = view.readyButton.state;
   onlineReady.textContent = `${t("online.ready")}${view.readyButton.state === "ready" ? " ✓" : ""}`;
   onlineReady.disabled = view.readyButton.disabled;
+  onlineRoomMode.value = view.settings.mode;
+  onlineRoomMode.disabled = !view.settings.editable;
+  onlineDifficulty.value = view.settings.difficulty;
+  onlineDifficulty.disabled = !view.settings.editable;
+  for (const key of Object.keys(onlineMechanismControls) as Array<keyof OnlineMechanismOptions>) {
+    onlineMechanismControls[key].checked = view.settings.options[key];
+    onlineMechanismControls[key].disabled = !view.settings.editable;
+  }
+  onlineRoomSettings.disabled = !view.settings.editable;
+  onlineSettingsNote.dataset.i18n = view.settings.locked
+    ? "online.settings.locked"
+    : localPlayerId === 0 ? "online.settings.hostOnly" : "online.settings.guestView";
+  onlineSettingsNote.textContent = t(onlineSettingsNote.dataset.i18n as TranslationKey);
+}
+
+function onlinePlayerDisplay(playerId: 0 | 1): string {
+  return playerId === 0 ? "1P" : "2P";
+}
+
+function updateRaceLocalLabel(): void {
+  if (!onlineRoom) return;
+  raceLocalLabel.textContent = `${onlinePlayerDisplay(onlineRoom.playerId)} · ${onlinePlayerName()} · ${t("online.you")}`;
 }
 
 async function copyCurrentRoomCode(): Promise<void> {
@@ -820,16 +939,7 @@ async function driveOnlineRoundLifecycle(): Promise<void> {
   onlineTransitionPending = true;
   const session = getOnlineSession();
   try {
-    if (action === "begin-countdown") {
-      const timingSamples = [data.players?.[0]?.timing, data.players?.[1]?.timing]
-        .filter((value): value is { rttMs: number; jitterMs: number } => Boolean(value));
-      await session.beginCountdown(room.roomCode, {
-        seed: Math.floor(Math.random() * 0x7fffffff),
-        round: (data.meta.round ?? 0) + 1,
-        countdownEndsAt: now + ONLINE_COUNTDOWN_MS,
-        bufferTicks: selectBufferTicks(timingSamples)
-      });
-    } else if (action === "begin-playing") {
+    if (action === "begin-playing") {
       await session.beginPlaying(room.roomCode);
     } else if (action === "begin-results") {
       await session.beginResults(room.roomCode, now + ONLINE_RESULTS_MS);
@@ -841,6 +951,29 @@ async function driveOnlineRoundLifecycle(): Promise<void> {
       onlineErrorMessage(error),
       "error"
     );
+  } finally {
+    onlineTransitionPending = false;
+  }
+}
+
+async function startOnlineRound(): Promise<void> {
+  const room = onlineRoom;
+  const data = onlineRoomData;
+  if (!room || room.role !== "host" || onlinePhase !== "lobby" || !data?.meta ||
+      !data.players?.[0]?.ready || !data.players?.[1]?.ready || onlineTransitionPending) return;
+  onlineTransitionPending = true;
+  const now = onlineServerNow();
+  const timingSamples = [data.players[0]?.timing, data.players[1]?.timing]
+    .filter((value): value is { rttMs: number; jitterMs: number } => Boolean(value));
+  try {
+    await getOnlineSession().beginCountdown(room.roomCode, {
+      seed: Math.floor(Math.random() * 0x7fffffff),
+      round: (data.meta.round ?? 0) + 1,
+      countdownEndsAt: now + ONLINE_COUNTDOWN_MS,
+      bufferTicks: selectBufferTicks(timingSamples)
+    });
+  } catch (error) {
+    setOnlineStatus(onlineErrorMessage(error), "error");
   } finally {
     onlineTransitionPending = false;
   }
@@ -946,7 +1079,7 @@ function subscribeOnlineRoom(room: OnlineRoomHandle): void {
     onlineRoomData = roomData;
     onlinePhase = phase;
     renderOnlineLobby(roomData, room.playerId);
-    if (roomData.meta?.mode) onlineMode.value = roomData.meta.mode;
+    if (roomData.meta?.mode) onlineRoomMode.value = roomData.meta.mode;
     if (phase === "lobby") {
       if (onlineGame || onlineRace) {
         showOnlineRoomLobby(room, roomData);
@@ -957,7 +1090,7 @@ function subscribeOnlineRoom(room: OnlineRoomHandle): void {
           players: t(guestPresent ? "online.room.players.connected" : "online.room.players.waiting"),
           ready: t(hostReady && guestReady ? "online.room.ready.starting" : "online.room.ready.waiting")
         }),
-        hostReady && guestReady ? "success" : "neutral"
+        "neutral"
       );
     }
     if (phase === "ended" && onlineRoom?.roomCode === room.roomCode) {
@@ -1025,13 +1158,8 @@ function prepareOnlineMode(
   prepareOnlineCoop(room, meta);
 }
 
-function onlineOptions(meta: { options?: Partial<SaveData["settings"]> }) {
-  return {
-    conveyor: meta.options?.conveyor ?? save.settings.conveyor,
-    spring: meta.options?.spring ?? save.settings.spring,
-    rotating: meta.options?.rotating ?? save.settings.rotating,
-    fast: meta.options?.fast ?? save.settings.fast
-  };
+function onlineSettings(meta: OnlineRoomMeta): OnlineRoomSettings {
+  return normalizeOnlineRoomSettings(meta);
 }
 
 function clearOnlineTransportSubscriptions(): void {
@@ -1053,14 +1181,14 @@ function prepareOnlineCoop(
   meta: OnlineRoomMeta
 ): void {
   const seed = meta.seed ?? Date.now();
-  const onlineDifficulty = meta.difficulty ?? save.settings.difficulty;
+  const settings = onlineSettings(meta);
   const round = meta.round ?? 0;
   const session = getOnlineSession();
   clearOnlineTransportSubscriptions();
   onlineGame = new OnlineGameController({
     seed,
-    difficulty: onlineDifficulty,
-    options: onlineOptions(meta),
+    difficulty: settings.difficulty,
+    options: settings.options,
     round,
     bufferTicks: meta.bufferTicks ?? DEFAULT_BUFFER_TICKS,
     playerId: room.playerId,
@@ -1124,7 +1252,7 @@ function prepareOnlineCoop(
   onlineConnectionIndicator.hidden = true;
   setOnlineStatus(t("online.phase.playing"));
   renderer.render(onlineGame.snapshot());
-  void refreshWorldRecord("coop", onlineDifficulty);
+  void refreshWorldRecord("coop", settings.difficulty);
 }
 
 function maybeApplyHostCheckpoint(checkpoint: OnlineCheckpoint | null): void {
@@ -1146,12 +1274,13 @@ function prepareOnlineRace(
   sendSnapshot?: (snapshot: RaceSnapshot) => Promise<void>
 ): void {
   const round = meta.round ?? 0;
+  const settings = onlineSettings(meta);
   const session = getOnlineSession();
   clearOnlineTransportSubscriptions();
   onlineRace = new OnlineRaceController({
     seed: meta.seed ?? Date.now(),
-    difficulty: meta.difficulty ?? save.settings.difficulty,
-    options: onlineOptions(meta),
+    difficulty: settings.difficulty,
+    options: settings.options,
     playerId: room.playerId,
     playerName: onlinePlayerName(),
     round,
@@ -1182,8 +1311,12 @@ function prepareOnlineRace(
   gameFrame.hidden = true;
   raceStage.hidden = false;
   cabinet.classList.add("race-active");
-  raceLocalLabel.textContent = `1P · ${onlinePlayerName()}`;
-  raceRemoteLabel.textContent = `2P · ${onlineRoomData?.players?.[opponentId]?.name ?? "PLAYER2"}`;
+  syncRendererSettings();
+  raceLocalPane.dataset.playerColor = room.playerId === 0 ? "yellow" : "green";
+  raceRemoteCanvas.closest<HTMLElement>(".race-pane")!.dataset.playerColor =
+    room.playerId === 0 ? "green" : "yellow";
+  updateRaceLocalLabel();
+  raceRemoteLabel.textContent = `${onlinePlayerDisplay(opponentId)} · ${onlineRoomData?.players?.[opponentId]?.name ?? "PLAYER2"}`;
   const initial = onlineRace.localSnapshot();
   raceLocalRenderer.render(initial);
   raceRemoteRenderer.render({ ...initial, players: [], platforms: [] });
@@ -1192,17 +1325,21 @@ function prepareOnlineRace(
   onlineState.hidden = true;
   onlineConnectionIndicator.hidden = true;
   updateFullscreenScale();
-  void refreshWorldRecord("race", meta.difficulty ?? save.settings.difficulty);
+  void refreshWorldRecord("race", settings.difficulty);
 }
 
 function showOnlineState(
   titleText: string,
   detail: string,
-  options: { pause?: OnlinePauseState; canLeave?: boolean } = {}
+  options: { pause?: OnlinePauseState; canLeave?: boolean; countdown?: boolean } = {}
 ): void {
   onlineState.hidden = false;
+  onlineState.dataset.countdown = String(options.countdown === true);
+  onlineState.dataset.result = "false";
   onlineStateTitle.textContent = titleText;
   onlineStateDetail.textContent = detail;
+  onlineStateDetail.hidden = false;
+  onlineResult.hidden = true;
   const pause = options.pause;
   const required = onlinePauseRequiredPlayers();
   onlinePausePlayers.hidden = !pause || pause.resumeAt !== null;
@@ -1256,7 +1393,8 @@ function renderOnlineStateDialog(): void {
       const remaining = pause.resumeAt - now;
       showOnlineState(
         remaining <= 0 ? "GO!" : String(Math.max(1, Math.ceil(remaining / 1000))),
-        remaining <= 0 ? "" : t("online.pause.resume")
+        remaining <= 0 ? "" : t("online.pause.resume"),
+        { countdown: true }
       );
     } else {
       showOnlineState(t("online.pause.title"), t("online.pause.waiting"), {
@@ -1269,7 +1407,9 @@ function renderOnlineStateDialog(): void {
   const countdownEndsAt = onlineRoomData?.meta?.countdownEndsAt ?? undefined;
   const countdown = countdownEndsAt === undefined ? null : onlineCountdownLabel(now, countdownEndsAt);
   if ((onlinePhase === "countdown" || onlinePhase === "playing") && countdown) {
-    showOnlineState(countdown, countdown === "GO!" ? "" : t("online.phase.ready"));
+    showOnlineState(countdown, countdown === "GO!" ? "" : t("online.phase.ready"), {
+      countdown: true
+    });
     return;
   }
   if (connectionPresentation(connectionState).dialog) {
@@ -1301,10 +1441,19 @@ function renderOnlineStateDialog(): void {
     const floors = view.mode === "race"
       ? `1P ${view.localFloor} / 2P ${view.remoteFloor ?? 0}`
       : t("online.result.floor", { floor: view.localFloor });
-    showOnlineState(
-      view.mode === "race" ? localizedRaceResult() : t("online.result.gameover"),
-      `${placementText}\n${floors}\n${rankText}\n${t("online.result.next", { seconds: view.seconds })}`
-    );
+    showOnlineState(view.mode === "race" ? localizedRaceResult() : t("online.result.gameover"), "");
+    onlineState.dataset.result = "true";
+    onlineStateDetail.hidden = true;
+    onlineResult.hidden = false;
+    onlineResult.querySelector<HTMLElement>('[data-result="score"]')!.textContent = floors;
+    const placement = onlineResult.querySelector<HTMLElement>('[data-result="placement"]')!;
+    placement.textContent = placementText;
+    placement.dataset.success = String(view.mode === "coop" || view.placement === 1);
+    const rank = onlineResult.querySelector<HTMLElement>('[data-result="rank"]')!;
+    rank.textContent = rankText;
+    rank.dataset.success = String(Boolean(view.best5Rank));
+    onlineResult.querySelector<HTMLElement>('[data-result="next"]')!.textContent =
+      t("online.result.next", { seconds: view.seconds });
     return;
   }
   onlineState.hidden = true;
@@ -1341,7 +1490,8 @@ function drawRaceStatus(): void {
     ? identity.name
     : onlineRoomData?.players?.[opponentId]?.name ?? "PLAYER2";
   raceRemoteLabel.textContent = connection === "healthy" && identity
-    ? `2P · ${name}` : `2P · ${t("online.connection.syncing")}`;
+    ? `${onlinePlayerDisplay(opponentId)} · ${name}`
+    : `${onlinePlayerDisplay(opponentId)} · ${t("online.connection.syncing")}`;
 }
 
 document.querySelectorAll<HTMLButtonElement>("[data-start]").forEach((button) => {
@@ -1438,8 +1588,8 @@ onlineCreate.addEventListener("click", async () => {
     const room = await session.createRoom({
       playerName: onlinePlayerName(),
       seed: Date.now(),
-      difficulty: save.settings.difficulty,
-      mode: onlineMode.value as OnlineRoomMode,
+      difficulty: "normal",
+      mode: onlineRoomMode.value as OnlineRoomMode,
       options: {
         conveyor: save.settings.conveyor,
         spring: save.settings.spring,
@@ -1456,10 +1606,19 @@ onlineCreate.addEventListener("click", async () => {
     onlineCode.value = room.roomCode;
     enterOnlineRoom("host");
     renderOnlineLobby({
+      meta: {
+        difficulty: "normal",
+        mode: onlineRoomMode.value as OnlineRoomMode,
+        options: {
+          conveyor: save.settings.conveyor,
+          spring: save.settings.spring,
+          rotating: save.settings.rotating,
+          fast: save.settings.fast
+        }
+      },
       players: { 0: { connected: true, ready: false, name: onlinePlayerName() } }
     }, room.playerId);
     subscribeOnlineRoom(room);
-    await copyCurrentRoomCode();
   } catch (error) {
     setOnlineStatus(
       onlineErrorMessage(error),
@@ -1503,7 +1662,7 @@ onlineReady.addEventListener("click", async () => {
     await getOnlineSession().setReady(onlineRoom.roomCode, onlineRoom.playerId, true);
     onlineReady.dataset.state = "ready";
     onlineReady.textContent = `${t("online.ready")} ✓`;
-    setOnlineStatus(t("online.pause.waiting"), "success");
+    setOnlineStatus(t("online.pause.waiting"));
   } catch (error) {
     onlineReady.disabled = false;
     setOnlineStatus(
@@ -1514,16 +1673,40 @@ onlineReady.addEventListener("click", async () => {
 });
 onlineCode.addEventListener("input", () => onlineCode.classList.remove("error"));
 onlineCopy.addEventListener("click", () => void copyCurrentRoomCode());
-onlineMode.addEventListener("change", async () => {
+onlineStart.addEventListener("click", () => void startOnlineRound());
+async function updateOnlineRoomSettings(): Promise<void> {
   if (!onlineRoom || onlineRoom.role !== "host" || onlinePhase !== "lobby") return;
-  const mode = onlineMode.value as OnlineRoomMode;
-  onlineRoom.mode = mode;
+  const locked = Boolean(
+    onlineRoomData?.players?.[0]?.ready || onlineRoomData?.players?.[1]?.ready
+  );
+  if (locked) return;
+  const settings: OnlineRoomSettings = {
+    mode: onlineRoomMode.value as OnlineRoomMode,
+    difficulty: onlineDifficulty.value as Difficulty,
+    options: {
+      conveyor: onlineMechanismControls.conveyor.checked,
+      spring: onlineMechanismControls.spring.checked,
+      rotating: onlineMechanismControls.rotating.checked,
+      fast: onlineMechanismControls.fast.checked
+    }
+  };
+  onlineRoom.mode = settings.mode;
   try {
-    await getOnlineSession().updateMeta(onlineRoom.roomCode, { mode });
+    await getOnlineSession().updateMeta(onlineRoom.roomCode, {
+      mode: settings.mode,
+      difficulty: settings.difficulty,
+      options: settings.options
+    });
   } catch {
-    // ponytail: silent fail, local mode already set for next round
+    setOnlineStatus(t("online.error.network"), "error");
   }
-});
+}
+
+onlineRoomMode.addEventListener("change", () => void updateOnlineRoomSettings());
+onlineDifficulty.addEventListener("change", () => void updateOnlineRoomSettings());
+for (const control of Object.values(onlineMechanismControls)) {
+  control.addEventListener("change", () => void updateOnlineRoomSettings());
+}
 pauseControl.addEventListener("click", togglePause);
 abortControl.addEventListener("click", () => {
   if (game || onlineGame) {
@@ -1726,18 +1909,23 @@ if (qaMode) {
       };
       renderOnlineStateDialog();
     },
-    showOnlineLobby: (players, localPlayerId = 0) => {
+    showOnlineLobby: (players, localPlayerId = 0, meta) => {
       onlinePanel.hidden = false;
       title.hidden = true;
       onlineRoom = {
         roomCode: "1234",
         role: localPlayerId === 0 ? "host" : "guest",
         playerId: localPlayerId,
-        mode: "coop"
+        mode: meta?.mode ?? "coop"
       };
       onlineCode.value = "1234";
       enterOnlineRoom(localPlayerId === 0 ? "host" : "guest");
-      renderOnlineLobby({ players }, localPlayerId);
+      const lobbyData: OnlineRoomData = {
+        players,
+        meta: normalizeOnlineRoomSettings(meta)
+      };
+      onlineRoomData = lobbyData;
+      renderOnlineLobby(lobbyData, localPlayerId);
     }
   };
 }

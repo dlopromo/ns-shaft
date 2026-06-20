@@ -4,7 +4,7 @@ export const ONLINE_RESULTS_MS = 5000;
 
 export type OnlineRoomPhase = "lobby" | "countdown" | "playing" | "results" | "ended";
 export type OnlineHostAction =
-  | "begin-countdown" | "begin-playing" | "begin-results" | "reset-lobby";
+  | "begin-playing" | "begin-results" | "reset-lobby";
 
 export function nextOnlineHostAction(input: {
   phase: OnlineRoomPhase;
@@ -14,7 +14,7 @@ export function nextOnlineHostAction(input: {
   countdownEndsAt?: number;
   resultsEndsAt?: number;
 }): OnlineHostAction | null {
-  if (input.phase === "lobby") return input.bothReady ? "begin-countdown" : null;
+  if (input.phase === "lobby") return null;
   if (input.phase === "countdown") {
     return input.countdownEndsAt !== undefined && input.now >= input.countdownEndsAt
       ? "begin-playing" : null;

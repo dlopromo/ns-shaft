@@ -1,5 +1,9 @@
 Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windows packages and build a faithful browser remake using TypeScript, Canvas, deterministic simulation, audio, local save data, tests, and research documentation.
 
+Latest: ONLINE 2P lobby now uses one three-locale layout: three-cell room header, native radio groups for mode/difficulty, a 2x2 mechanism grid, no duplicated in-room room-code/status rows, and full-frame start/resume countdown overlays.
+Latest polish: room-rule and outer labels now share an 11px/13px rhythm, radio/checkbox controls are vertically centered, player status no longer steals HOST/GUEST label width, and lobby row spacing is compact.
+Latest online flow: lobby mode/difficulty use compact dropdowns, online difficulty defaults to Normal, COPY is replaced by a host-only START after the guest joins, and both Ready states wait for an explicit host start. The three room status cells are larger, transient messages no longer reserve space, and results use structured score/place/Best 5/countdown rows.
+
 ## Progress
 
 - Confirmed Windows 1.3J is a 1997 PE32 i386 Win32/GDI program.
@@ -253,6 +257,13 @@ Original prompt: Reverse engineer the supplied NS-SHAFT 1.3J Macintosh and Windo
 - Expanded Online Co-op and Split Race results with a server-time five-second
   return countdown, room placement/shared result, and the current submission's
   global Best 5 rank identified by its Firebase submission ID.
+- Rebuilt BEST 5 as a fixed five-row grid with separate rank, eight-character
+  player name and floor columns. Co-op/local 2P names use a stable two-line
+  cell, and the panel stays centered over the original left playfield.
+- Added host-authoritative Online room settings for difficulty, speed,
+  conveyor, spring and rotating floors. Guests see the synchronized values,
+  either player's Ready state locks editing, and online rounds now use room
+  meta exclusively while the external Options panel is explicitly local-only.
 
 ## Remaining
 
