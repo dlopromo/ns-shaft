@@ -275,9 +275,23 @@ root.innerHTML = `
             <button id="online-start" type="button" data-i18n="online.start" disabled hidden>${t("online.start")}</button>
             <button data-close type="button" data-i18n="online.back">${t("online.back")}</button>
           </div>
-          <label id="online-code-label"><span data-i18n="online.room.code">${t("online.room.code")}</span> <input id="online-code" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label>
         </div>
       </section>
+
+      <dialog id="room-code-dialog" class="room-code-dialog">
+        <form method="dialog">
+          <h2 id="room-code-title">${t("online.room.createPrompt")}</h2>
+          <p id="room-code-hint">${t("online.room.createHint")}</p>
+          <label><span data-i18n="online.room.code">${t("online.room.code")}</span>
+            <input id="room-code-input" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off">
+          </label>
+          <p id="room-code-error" class="room-code-error" hidden></p>
+          <div class="dialog-actions">
+            <button id="room-code-cancel" type="button" data-i18n="common.cancel">${t("common.cancel")}</button>
+            <button id="room-code-submit" type="submit">${t("online.room.create")}</button>
+          </div>
+        </form>
+      </dialog>
 
       <section id="about-panel" class="screen about-screen" hidden>
         <img src="${assetUrl("assets/web/rt_bitmap-105-1041.png")}" alt="NS-SHAFT copyright">
@@ -337,14 +351,13 @@ root.innerHTML = `
       </label>
     </nav>
     <nav id="mobile-controls" class="mobile-controls" aria-label="${t("mobile.controlsAria")}" data-i18n-aria="mobile.controlsAria">
-      <div id="mobile-directions" class="mobile-directions">
-        <button id="mobile-left" type="button" class="mobile-direction mobile-left" aria-label="${t("mobile.left")}" data-i18n-aria="mobile.left">◀</button>
-        <button id="mobile-right" type="button" class="mobile-direction mobile-right" aria-label="${t("mobile.right")}" data-i18n-aria="mobile.right">▶</button>
-      </div>
       <div class="mobile-actions">
         <button id="mobile-primary" type="button">${t("common.pause")}</button>
         <button id="mobile-abort" type="button" data-i18n="common.abort">${t("common.abort")}</button>
-        <button id="mobile-fullscreen" type="button" data-i18n="mobile.fullscreen">${t("mobile.fullscreen")}</button>
+      </div>
+      <div id="mobile-directions" class="mobile-directions">
+        <button id="mobile-left" type="button" class="mobile-direction mobile-left" aria-label="${t("mobile.left")}" data-i18n-aria="mobile.left">◀</button>
+        <button id="mobile-right" type="button" class="mobile-direction mobile-right" aria-label="${t("mobile.right")}" data-i18n-aria="mobile.right">▶</button>
       </div>
     </nav>
   </main>`;
@@ -368,8 +381,13 @@ const onlineHeaderCells = Array.from(
   document.querySelectorAll<HTMLElement>("[data-online-header]")
 );
 const onlineName = document.querySelector<HTMLInputElement>("#online-name")!;
-const onlineCode = document.querySelector<HTMLInputElement>("#online-code")!;
-const onlineCodeLabel = document.querySelector<HTMLElement>("#online-code-label")!;
+const roomCodeDialog = document.querySelector<HTMLDialogElement>("#room-code-dialog")!;
+const roomCodeTitle = document.querySelector<HTMLElement>("#room-code-title")!;
+const roomCodeHint = document.querySelector<HTMLElement>("#room-code-hint")!;
+const roomCodeInput = document.querySelector<HTMLInputElement>("#room-code-input")!;
+const roomCodeError = document.querySelector<HTMLElement>("#room-code-error")!;
+const roomCodeCancel = document.querySelector<HTMLButtonElement>("#room-code-cancel")!;
+const roomCodeSubmit = document.querySelector<HTMLButtonElement>("#room-code-submit")!;
 const onlineCreate = document.querySelector<HTMLButtonElement>("#online-create")!;
 const onlineJoin = document.querySelector<HTMLButtonElement>("#online-join")!;
 const onlineReady = document.querySelector<HTMLButtonElement>("#online-ready")!;
@@ -419,7 +437,6 @@ const mobileLeft = document.querySelector<HTMLButtonElement>("#mobile-left")!;
 const mobileRight = document.querySelector<HTMLButtonElement>("#mobile-right")!;
 const mobilePrimary = document.querySelector<HTMLButtonElement>("#mobile-primary")!;
 const mobileAbort = document.querySelector<HTMLButtonElement>("#mobile-abort")!;
-const mobileFullscreen = document.querySelector<HTMLButtonElement>("#mobile-fullscreen")!;
 const mobileLocale = document.querySelector<HTMLSelectElement>("#mobile-locale")!;
 const mobileMatcher = window.matchMedia(MOBILE_MEDIA_QUERY);
 const audio = new GameAudio();
@@ -432,6 +449,7 @@ let onlineSession: FirebaseOnlineSession | null = null;
 let firebaseDatabase: RealtimeDatabasePort | null = null;
 let leaderboard: FirebaseLeaderboard | null = null;
 let onlineRoom: OnlineRoomHandle | null = null;
+let pendingRoomCodeAction: "create" | "join" = "create";
 let unsubscribeOnlineRoom: (() => void) | null = null;
 let unsubscribeOnlineInputs: (() => void) | null = null;
 let unsubscribeRaceSnapshots: (() => void) | null = null;
@@ -471,7 +489,6 @@ const syncMobileControls = () => {
   mobilePrimary.disabled = currentMobilePrimaryAction === "disabled";
   mobilePrimary.textContent = t(`common.${currentMobilePrimaryAction === "disabled" ? "pause" : currentMobilePrimaryAction}` as TranslationKey);
   mobileAbort.disabled = !mobileControlsVisible;
-  mobileFullscreen.hidden = !document.fullscreenEnabled;
   cabinet.dataset.orientation = currentMobileOrientation();
   document.body.classList.toggle("mobile-active", isMobileActive());
 };
@@ -805,7 +822,6 @@ function enterOnlineRoom(_role: "host" | "guest"): void {
   onlineRoomHeader.hidden = false;
   onlineCreate.hidden = true;
   onlineJoin.hidden = true;
-  onlineCodeLabel.hidden = true;
   onlineName.disabled = true;
   onlinePlayers.hidden = false;
   onlineRoomSettings.hidden = false;
@@ -819,14 +835,11 @@ function enterOnlineRoom(_role: "host" | "guest"): void {
 
 function exitOnlineRoom(): void {
   onlineStatus.hidden = true;
-  onlineCode.classList.remove("error");
   onlineRoomHeader.hidden = true;
   onlineCreate.hidden = false;
   onlineCreate.disabled = false;
   onlineJoin.hidden = false;
   onlineJoin.disabled = false;
-  onlineCodeLabel.hidden = false;
-  onlineCode.readOnly = false;
   onlineName.disabled = false;
   onlineCopy.hidden = true;
   onlineCopy.disabled = true;
@@ -871,7 +884,6 @@ function renderOnlineLobby(room: LobbyRoomData, localPlayerId: 0 | 1): void {
   onlineReady.hidden = !view.actions.showReady;
   onlineStart.hidden = !view.actions.showStart;
   onlineStart.disabled = view.startButton.disabled;
-  onlineCodeLabel.hidden = !view.actions.showCodeInput;
   onlineCreate.hidden = !view.actions.showCreate;
   onlineJoin.hidden = !view.actions.showJoin;
   onlineRoomSettings.hidden = !view.actions.showSettings;
@@ -909,8 +921,6 @@ async function copyCurrentRoomCode(): Promise<void> {
     setOnlineStatus(t("online.room.copied", { code: onlineRoom.roomCode }), "success");
     return;
   }
-  onlineCode.focus();
-  onlineCode.select();
   setOnlineStatus(t("online.room.created", { code: onlineRoom.roomCode }), "error");
 }
 
@@ -1123,7 +1133,6 @@ async function resumeSavedOnlineRoom(): Promise<void> {
       ticket.playerName
     );
     onlineName.value = ticket.playerName;
-    onlineCode.value = room.roomCode;
     onlineRoom = room;
     enterOnlineRoom(room.role);
     subscribeOnlineRoom(room);
@@ -1605,10 +1614,6 @@ mobileAbort.addEventListener("click", () => {
   audio.playEffect("abort");
   showTitle();
 });
-mobileFullscreen.addEventListener("click", () => {
-  if (document.fullscreenElement) void document.exitFullscreen();
-  else void cabinet.requestFullscreen();
-});
 window.addEventListener("blur", () => touchInput.clear());
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") touchInput.clear();
@@ -1709,15 +1714,26 @@ mobileLocale.addEventListener("change", () => {
   persist();
   applyLocaleToDocument();
 });
-onlineCreate.addEventListener("click", async () => {
+function openRoomCodeDialog(action: "create" | "join"): void {
+  pendingRoomCodeAction = action;
+  roomCodeTitle.textContent = t(
+    action === "create" ? "online.room.createPrompt" : "online.room.joinPrompt"
+  );
+  roomCodeHint.textContent = t(
+    action === "create" ? "online.room.createHint" : "online.room.joinHint"
+  );
+  roomCodeSubmit.textContent = t(
+    action === "create" ? "online.room.create" : "online.room.join"
+  );
+  roomCodeInput.value = "";
+  roomCodeInput.classList.remove("error");
+  roomCodeError.hidden = true;
+  roomCodeDialog.showModal();
+  requestAnimationFrame(() => roomCodeInput.focus());
+}
+
+async function createOnlineRoom(codeInput: string): Promise<void> {
   try {
-    const codeInput = onlineCode.value.trim();
-    if (codeInput && !/^\d{4}$/.test(codeInput)) {
-      onlineCode.classList.add("error");
-      setOnlineStatus(t("online.error.roomCode"), "error");
-      return;
-    }
-    onlineCode.classList.remove("error");
     onlineCreate.disabled = true;
     setOnlineStatus(t("online.room.creating"));
     const session = getOnlineSession();
@@ -1740,7 +1756,6 @@ onlineCreate.addEventListener("click", async () => {
     void session.measureNetworkTiming(room.roomCode, room.playerId).catch(() => undefined);
     save.lastInputName = onlinePlayerName();
     persist();
-    onlineCode.value = room.roomCode;
     enterOnlineRoom("host");
     renderOnlineLobby({
       meta: {
@@ -1764,16 +1779,15 @@ onlineCreate.addEventListener("click", async () => {
   } finally {
     if (!onlineRoom) onlineCreate.disabled = false;
   }
-});
-onlineJoin.addEventListener("click", async () => {
+}
+
+async function joinOnlineRoom(code: string): Promise<void> {
   try {
-    const validation = validateRoomCode(onlineCode.value);
-    if (!validation.ok) throw new Error(validation.reason);
     onlineJoin.disabled = true;
     setOnlineStatus(t("online.room.joining"));
     const session = getOnlineSession();
     onlineServerOffsetMs = await session.getServerTimeOffset().catch(() => 0);
-    const room = await session.joinRoom(validation.code, onlinePlayerName());
+    const room = await session.joinRoom(code, onlinePlayerName());
     onlineRoom = room;
     saveOnlineResumeTicket(room);
     void session.measureNetworkTiming(room.roomCode, room.playerId).catch(() => undefined);
@@ -1790,6 +1804,31 @@ onlineJoin.addEventListener("click", async () => {
   } finally {
     if (!onlineRoom) onlineJoin.disabled = false;
   }
+}
+
+onlineCreate.addEventListener("click", () => openRoomCodeDialog("create"));
+onlineJoin.addEventListener("click", () => openRoomCodeDialog("join"));
+roomCodeCancel.addEventListener("click", () => roomCodeDialog.close());
+roomCodeInput.addEventListener("input", () => {
+  roomCodeInput.value = roomCodeInput.value.replace(/\D/g, "").slice(0, 4);
+  roomCodeInput.classList.remove("error");
+  roomCodeError.hidden = true;
+});
+roomCodeDialog.querySelector("form")!.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const codeInput = roomCodeInput.value.trim();
+  const valid = pendingRoomCodeAction === "create"
+    ? codeInput === "" || /^\d{4}$/.test(codeInput)
+    : validateRoomCode(codeInput).ok;
+  if (!valid) {
+    roomCodeInput.classList.add("error");
+    roomCodeError.textContent = t("online.error.roomCode");
+    roomCodeError.hidden = false;
+    return;
+  }
+  roomCodeDialog.close();
+  if (pendingRoomCodeAction === "create") void createOnlineRoom(codeInput);
+  else void joinOnlineRoom(codeInput);
 });
 onlineReady.addEventListener("click", async () => {
   if (!onlineRoom) return;
@@ -1808,7 +1847,6 @@ onlineReady.addEventListener("click", async () => {
     );
   }
 });
-onlineCode.addEventListener("input", () => onlineCode.classList.remove("error"));
 onlineCopy.addEventListener("click", () => void copyCurrentRoomCode());
 onlineStart.addEventListener("click", () => void startOnlineRound());
 async function updateOnlineRoomSettings(): Promise<void> {
@@ -1949,7 +1987,7 @@ window.render_game_to_text = () => JSON.stringify({
     direction: touchInput.peekDirection() === "none" ? "neutral" : touchInput.peekDirection(),
     primaryAction: currentMobilePrimaryAction,
     abortAvailable: mobileControlsVisible,
-    fullscreenAvailable: Boolean(document.fullscreenEnabled),
+    fullscreenAvailable: !isMobileActive() && Boolean(document.fullscreenEnabled),
     viewport: mobileViewport(),
     directionsVisible: mobileControlsVisible && !mobileDirections.hidden,
     actionsVisible: mobileControlsVisible
@@ -2098,7 +2136,6 @@ if (qaMode) {
         playerId: localPlayerId,
         mode: meta?.mode ?? "coop"
       };
-      onlineCode.value = "1234";
       enterOnlineRoom(localPlayerId === 0 ? "host" : "guest");
       const lobbyData: OnlineRoomData = {
         players,

@@ -76,7 +76,8 @@ describe("Windows 1.3J native layout", () => {
 
   test("keeps BEST 5 centered with fixed record columns", () => {
     const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
-    expect(css).toMatch(/\.records-content\s*\{[^}]*width:\s*390px;[^}]*margin:\s*58px 0 0 37px;/s);
+    expect(css).toMatch(/\.records-screen\s*\{[^}]*display:\s*grid;[^}]*place-items:\s*center;/s);
+    expect(css).toMatch(/\.records-content\s*\{[^}]*width:\s*390px;[^}]*margin:\s*0;/s);
     expect(css).toMatch(/\.record-row\s*\{[^}]*grid-template-columns:\s*18px minmax\(0, 1fr\) 58px;/s);
     expect(css).toMatch(/\.record-player\s*\{[^}]*font-variant-numeric:\s*tabular-nums;/s);
   });

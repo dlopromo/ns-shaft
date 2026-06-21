@@ -31,6 +31,7 @@ for (const [name, viewport] of Object.entries({
       language: box("#mobile-locale"),
       desktopMenuVisible: getComputedStyle(document.querySelector(".main-menu")).display !== "none",
       languageCentered: Math.abs((box(".mobile-language").left + box(".mobile-language").right) / 2 - innerWidth / 2),
+      menuButtonBackground: getComputedStyle(document.querySelector("#mobile-title-menu button")).backgroundColor,
       languageIsLast: document.querySelector(".mobile-language").compareDocumentPosition(
         document.querySelector("#mobile-title-menu button:last-of-type")
       ) === Node.DOCUMENT_POSITION_PRECEDING
@@ -39,7 +40,8 @@ for (const [name, viewport] of Object.entries({
   const portraitLanguageFailure = viewport.width < viewport.height && title.languageCentered > 2;
   if (!title.state.mobile.active || title.desktopMenuVisible || title.language.width < 120 ||
       title.frame.left < 0 || title.frame.right > viewport.width || title.frame.bottom > viewport.height ||
-      title.menu.right > viewport.width || portraitLanguageFailure || !title.languageIsLast) {
+      title.menu.right > viewport.width || portraitLanguageFailure || !title.languageIsLast ||
+      title.menuButtonBackground !== "rgb(69, 73, 80)") {
     throw new Error(`${name} title layout failed: ${JSON.stringify(title)}`);
   }
   await page.screenshot({ path: new URL(`${name}-title.png`, output).pathname, fullPage: true });
@@ -73,7 +75,7 @@ for (const [name, viewport] of Object.entries({
     if (Math.round(dialog.width) !== viewport.width || Math.round(dialog.height) !== viewport.height ||
         !["auto", "scroll"].includes(dialog.overflowY) || !dialog.closeVisible || !dialog.contextPrevented ||
         !dialog.gesturePrevented || !dialog.doubleTapPrevented || dialog.horizontalOverflow > 1 ||
-        dialog.background !== "rgb(212, 208, 200)") {
+        dialog.background !== "rgb(20, 22, 25)") {
       throw new Error(`${name}/${locale} dialog layout failed: ${JSON.stringify(dialog)}`);
     }
     if (name === "portrait-430" && locale === "ja") {
@@ -81,6 +83,57 @@ for (const [name, viewport] of Object.entries({
     }
   }
   await page.locator("#options-panel [data-close]").click();
+
+  await page.locator("#mobile-title-menu [data-open='online']").click();
+  await page.locator("#online-join").click();
+  const roomCodeDialog = await page.locator("#room-code-dialog").evaluate((dialog) => {
+    const rect = dialog.getBoundingClientRect();
+    const input = dialog.querySelector("input");
+    return {
+      open: dialog.open,
+      background: getComputedStyle(dialog).backgroundColor,
+      color: getComputedStyle(dialog).color,
+      horizontalCenterError: Math.abs(rect.left + rect.width / 2 - innerWidth / 2),
+      top: rect.top,
+      inputMode: input.inputMode,
+      maxLength: input.maxLength
+    };
+  });
+  if (!roomCodeDialog.open || roomCodeDialog.background !== "rgb(41, 44, 49)" ||
+      roomCodeDialog.color !== "rgb(230, 230, 230)" || roomCodeDialog.horizontalCenterError > 2 ||
+      roomCodeDialog.top < 8 || roomCodeDialog.top > viewport.height * 0.2 ||
+      roomCodeDialog.inputMode !== "numeric" || roomCodeDialog.maxLength !== 4) {
+    throw new Error(`${name} room-code dialog failed: ${JSON.stringify(roomCodeDialog)}`);
+  }
+  if (name === "portrait-430") {
+    await page.screenshot({ path: new URL(`${name}-room-code.png`, output).pathname, fullPage: true });
+  }
+  await page.locator("#room-code-cancel").click();
+  await page.locator("#online-panel [data-close]").click();
+
+  await page.locator("#mobile-title-menu [data-open='records']").click();
+  await page.waitForFunction(() => document.querySelectorAll("#records-list .record-row").length === 15);
+  const mobileRecords = await page.evaluate(() => {
+    const panel = document.querySelector("#records-panel").getBoundingClientRect();
+    const content = document.querySelector(".records-content").getBoundingClientRect();
+    const list = document.querySelector("#records-list");
+    const actions = document.querySelector(".records-content .dialog-actions").getBoundingClientRect();
+    return {
+      contained: content.top >= panel.top && content.bottom <= panel.bottom,
+      actionsVisible: actions.top >= panel.top && actions.bottom <= panel.bottom,
+      listScrollable: ["auto", "scroll"].includes(getComputedStyle(list).overflowY),
+      listHeight: list.clientHeight,
+      rowCount: list.querySelectorAll(".record-row").length
+    };
+  });
+  if (!mobileRecords.contained || !mobileRecords.actionsVisible || !mobileRecords.listScrollable ||
+      mobileRecords.listHeight <= 0 || mobileRecords.rowCount !== 15) {
+    throw new Error(`${name} mobile records failed: ${JSON.stringify(mobileRecords)}`);
+  }
+  if (name === "portrait-430") {
+    await page.screenshot({ path: new URL(`${name}-records.png`, output).pathname, fullPage: true });
+  }
+  await page.locator("#records-panel [data-close]").click();
 
   await page.locator("#mobile-title-menu [data-start='1']").click();
   await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).mobile.controlsVisible);
@@ -100,18 +153,22 @@ for (const [name, viewport] of Object.entries({
       actions: { top: actions.top, bottom: actions.bottom },
       actionTextClipped: [...document.querySelectorAll(".mobile-actions button")]
         .some((button) => button.scrollWidth > button.clientWidth + 1),
+      actionCount: document.querySelectorAll(".mobile-actions button").length,
+      bottomClearance: innerHeight - directions.bottom,
       left: { left: left.left, width: left.width, height: left.height },
       right: { right: right.right, width: right.width, height: right.height }
     };
   });
   const portraitControlFailure = viewport.width < viewport.height &&
     (controls.left.width < viewport.width * 0.4 || controls.right.width < viewport.width * 0.4 ||
-      controls.left.height !== 96 || controls.right.height !== 96 || controls.actions.top < controls.directions.bottom);
+      controls.left.height !== 96 || controls.right.height !== 96 ||
+      controls.actions.bottom > controls.directions.top);
   const landscapeControlFailure = viewport.width >= viewport.height &&
     Math.abs(controls.left.width - controls.right.width) > 2;
   if (controls.state.mobile.primaryAction !== "pause" || controls.left.left > 32 ||
       viewport.width - controls.right.right > 32 || portraitControlFailure || landscapeControlFailure ||
       controls.actionTextClipped || controls.viewport.scale !== 1 ||
+      controls.actionCount !== 2 || (viewport.width < viewport.height && controls.bottomClearance < 28) ||
       controls.state.mobile.viewport.width !== controls.viewport.width ||
       controls.state.mobile.viewport.height !== controls.viewport.height) {
     throw new Error(`${name} controls failed: ${JSON.stringify(controls)}`);

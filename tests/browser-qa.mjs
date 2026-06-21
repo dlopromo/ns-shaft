@@ -86,7 +86,7 @@ if (JSON.stringify(onlineModes) !== JSON.stringify(["協力プレイ", "対戦�
 }
 const preRoomAudit = await page.evaluate(() => ({
   nameDisabled: document.querySelector("#online-name").disabled,
-  codeVisible: !document.querySelector("#online-code").closest("label").hidden,
+  codeFieldPresent: Boolean(document.querySelector("#online-code-label")),
   createVisible: !document.querySelector("#online-create").hidden,
   joinVisible: !document.querySelector("#online-join").hidden,
   copyVisible: !document.querySelector("#online-copy").hidden,
@@ -95,11 +95,23 @@ const preRoomAudit = await page.evaluate(() => ({
   playersVisible: !document.querySelector("#online-players").hidden,
   settingsVisible: !document.querySelector("#online-room-settings").hidden
 }));
-if (preRoomAudit.nameDisabled || !preRoomAudit.codeVisible || !preRoomAudit.createVisible ||
+if (preRoomAudit.nameDisabled || preRoomAudit.codeFieldPresent || !preRoomAudit.createVisible ||
     !preRoomAudit.joinVisible || preRoomAudit.copyVisible || preRoomAudit.readyVisible ||
     preRoomAudit.startVisible || preRoomAudit.playersVisible || preRoomAudit.settingsVisible) {
   throw new Error(`Pre-room online panel is not minimal: ${JSON.stringify(preRoomAudit)}`);
 }
+await page.getByRole("button", { name: "部屋に入る" }).click();
+const codeDialogAudit = await page.locator("#room-code-dialog").evaluate((dialog) => ({
+  open: dialog.open,
+  title: dialog.querySelector("h2")?.textContent,
+  inputMode: dialog.querySelector("input")?.inputMode,
+  maxLength: dialog.querySelector("input")?.maxLength
+}));
+if (!codeDialogAudit.open || codeDialogAudit.title !== "ルームコードを入力" ||
+    codeDialogAudit.inputMode !== "numeric" || codeDialogAudit.maxLength !== 4) {
+  throw new Error(`Room code dialog is incorrect: ${JSON.stringify(codeDialogAudit)}`);
+}
+await page.locator("#room-code-cancel").click();
 await page.evaluate(() => window.__nsShaftQa.showOnlineLobby({
   0: { connected: true, ready: true, name: "HOST" },
   1: { connected: true, ready: false, name: "GUEST" }
@@ -141,7 +153,6 @@ const lobbyAudit = await page.evaluate(() => {
     roomMode: document.querySelector("#online-room-mode")?.value,
     springEnabled: document.querySelector("#online-spring").checked,
     statusVisible: getComputedStyle(document.querySelector("#online-status")).display !== "none",
-    codeInputVisible: getComputedStyle(document.querySelector("#online-code-label")).display !== "none",
     headerCells: Array.from(header.querySelectorAll("[data-online-header]")).map((node) => node.textContent.trim()),
     dialogContained: dialog.getBoundingClientRect().top >= screen.getBoundingClientRect().top &&
       dialog.getBoundingClientRect().bottom <= screen.getBoundingClientRect().bottom
@@ -161,7 +172,7 @@ if (lobbyAudit.hostStatus !== "ready" || lobbyAudit.hostText !== "準備完了" 
     !lobbyAudit.startDisabled || !lobbyAudit.roomSettingsVisible ||
     !lobbyAudit.roomSettingsDisabled || lobbyAudit.roomDifficulty !== "hard" ||
     lobbyAudit.roomMode !== "race" || lobbyAudit.springEnabled ||
-    lobbyAudit.statusVisible || lobbyAudit.codeInputVisible ||
+    lobbyAudit.statusVisible ||
     JSON.stringify(lobbyAudit.headerCells) !== JSON.stringify(["ROOM 1234", "PLAYERS 2/2", "READY WAITING"]) ||
     !lobbyAudit.dialogContained) {
   throw new Error(`Online lobby styling failed: ${JSON.stringify(lobbyAudit)}`);
@@ -251,7 +262,9 @@ await capture("02-options");
 const optionsContained = await page.locator("#options-panel .dialog").evaluate((dialog) => {
   const panel = document.querySelector("#options-panel").getBoundingClientRect();
   const rect = dialog.getBoundingClientRect();
-  return rect.top >= panel.top && rect.bottom <= panel.bottom && rect.height < 340;
+  const style = getComputedStyle(dialog);
+  return rect.top >= panel.top && rect.bottom <= panel.bottom && rect.height < 330 &&
+    dialog.scrollHeight === dialog.clientHeight && !["auto", "scroll"].includes(style.overflowY);
 });
 if (!optionsContained) throw new Error("Options dialog overflowed its panel");
 await page.getByRole("button", { name: "効果音テスト" }).click();
@@ -288,13 +301,13 @@ const recordsAudit = await page.evaluate(() => {
   const content = document.querySelector(".records-content").getBoundingClientRect();
   const rows = [...document.querySelectorAll("#records-list .record-row")];
   return {
-    playfieldCentered: Math.abs((content.left + content.width / 2) - (screen.left + 232)) <= 1,
+    cabinetCentered: Math.abs((content.left + content.width / 2) - (screen.left + screen.width / 2)) <= 1,
     contained: content.top >= screen.top && content.bottom <= screen.bottom,
     rows: rows.length,
     overflow: rows.some((row) => row.scrollWidth > row.clientWidth)
   };
 });
-if (!recordsAudit.playfieldCentered || !recordsAudit.contained ||
+if (!recordsAudit.cabinetCentered || !recordsAudit.contained ||
     recordsAudit.rows !== 15 || recordsAudit.overflow) {
   throw new Error(`BEST 5 layout failed: ${JSON.stringify(recordsAudit)}`);
 }

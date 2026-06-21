@@ -32,6 +32,7 @@ const HEIGHT = GAME_LAYOUT.playfield.height;
 const PLAYABLE_LEFT = GAME_LAYOUT.playable.x;
 const PLAYABLE_RIGHT = GAME_LAYOUT.playable.x + GAME_LAYOUT.playable.width;
 const PLAYER_RENDER_HALF_WIDTH = 16;
+const MINIMUM_SIDE_PASSAGE = 35;
 const SPRING_LAUNCH_MS = IPEL_PHYSICS.springCompressionMs;
 const ROTATING_CYCLE_MS =
   IPEL_PHYSICS.disappearingHoldMs + IPEL_PHYSICS.disappearingTurnMs;
@@ -584,8 +585,8 @@ export class GameSimulation {
     const right = x + IPEL_PHYSICS.platformWidth;
     const leftGap = x - PLAYABLE_LEFT;
     const rightGap = PLAYABLE_RIGHT - right;
-    if (leftGap > 0 && leftGap < IPEL_PHYSICS.playerCollisionSize) {
-      const openX = PLAYABLE_LEFT + IPEL_PHYSICS.playerCollisionSize;
+    if (leftGap > 0 && leftGap < MINIMUM_SIDE_PASSAGE) {
+      const openX = PLAYABLE_LEFT + MINIMUM_SIDE_PASSAGE;
       if (anchors.length > 0 &&
           !this.platformXIsReachableFromAnchors(PLAYABLE_LEFT, anchors) &&
           this.platformXIsReachableFromAnchors(openX, anchors)) {
@@ -593,9 +594,9 @@ export class GameSimulation {
       }
       return PLAYABLE_LEFT;
     }
-    if (rightGap > 0 && rightGap < IPEL_PHYSICS.playerCollisionSize) {
+    if (rightGap > 0 && rightGap < MINIMUM_SIDE_PASSAGE) {
       const openX = PLAYABLE_RIGHT - IPEL_PHYSICS.platformWidth -
-        IPEL_PHYSICS.playerCollisionSize;
+        MINIMUM_SIDE_PASSAGE;
       const wallX = PLAYABLE_RIGHT - IPEL_PHYSICS.platformWidth;
       if (anchors.length > 0 &&
           !this.platformXIsReachableFromAnchors(wallX, anchors) &&
@@ -623,8 +624,14 @@ export class GameSimulation {
     }
     if (!this.options.spring) weights.spring = 0;
     const recent = recentPlatforms.slice(-2);
-    if (recent.length === 2 && recent[0].variant === recent[1].variant) {
-      weights[recent[0].variant] = 0;
+    const lastVariant = recent.at(-1)?.variant;
+    if (lastVariant && lastVariant !== "normal") {
+      weights[lastVariant] = 0;
+    }
+    if (recent.length === 2 && recent.every((platform) => platform.variant !== "normal")) {
+      for (const variant of Object.keys(weights) as PlatformVariant[]) {
+        weights[variant] = variant === "normal" ? weights.normal : 0;
+      }
     }
     const total = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
     let roll = this.random.next() * total;

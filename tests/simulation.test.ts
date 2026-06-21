@@ -261,7 +261,7 @@ describe("GameSimulation gameplay rules", () => {
     );
   });
 
-  test("snaps wall-adjacent platforms unless the side gap can fit a player", () => {
+  test("snaps wall-adjacent platforms unless the side gap leaves 35px clearance", () => {
     const playableRight = GAME_LAYOUT.playable.x + GAME_LAYOUT.playable.width;
     const seenGaps = new Set<number>();
 
@@ -277,13 +277,13 @@ describe("GameSimulation gameplay rules", () => {
         const rightGap = playableRight - (platform.x + platform.width);
         seenGaps.add(leftGap);
         seenGaps.add(rightGap);
-        expect(leftGap === 0 || leftGap >= IPEL_PHYSICS.playerCollisionSize).toBe(true);
-        expect(rightGap === 0 || rightGap >= IPEL_PHYSICS.playerCollisionSize).toBe(true);
+        expect(leftGap === 0 || leftGap >= 35).toBe(true);
+        expect(rightGap === 0 || rightGap >= 35).toBe(true);
       }
     }
 
     expect(seenGaps.has(0)).toBe(true);
-    expect([...seenGaps].some((gap) => gap >= IPEL_PHYSICS.playerCollisionSize)).toBe(true);
+    expect([...seenGaps].some((gap) => gap >= 35)).toBe(true);
   });
 
   test("keeps every generated platform reachable from one of the previous three rows", () => {

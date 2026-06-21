@@ -4,6 +4,8 @@ Latest: ONLINE 2P lobby now uses one three-locale layout: three-cell room header
 Latest polish: room-rule and outer labels now share an 11px/13px rhythm, radio/checkbox controls are vertically centered, player status no longer steals HOST/GUEST label width, and lobby row spacing is compact.
 Latest online flow: lobby mode/difficulty use compact dropdowns, online difficulty defaults to Normal, COPY is replaced by a host-only START after the guest joins, and both Ready states wait for an explicit host start. The three room status cells are larger, transient messages no longer reserve space, and results use structured score/place/Best 5/countdown rows.
 Latest mobile foundation: added a full mobile playability plan, shared mobile media/scale helpers, pointer-based touch input merged with keyboard input, Game Boy-style mobile controls, anti-zoom viewport/CSS, mobile QA state, and mobile input/layout unit tests while preserving desktop geometry.
+Latest mobile/room polish: moved the mobile function row above the half-width direction keys, switched mobile Options/Best 5/Online/About surfaces to a low-contrast charcoal Win95 palette, and replaced the persistent room-code field with a centered Create/Join modal. Create accepts an optional four-digit code and generates one when blank; Join requires four digits.
+Latest generation guardrails: special variants cannot repeat immediately, every run of three generated rows includes a normal block, and side-wall gaps now either close completely or leave at least 35px so the full 32px character sprite can pass cleanly.
 
 ## Progress
 
@@ -293,7 +295,7 @@ Latest mobile foundation: added a full mobile playability plan, shared mobile me
 ### Milestone 3 — Mobile Online Co-op
 
 - [ ] Verify host and guest touch input in real Online Co-op.
-- [ ] Add fullscreen action to Online Pause Dialog.
+- [x] Remove the mobile fullscreen action; keep desktop `F` fullscreen unchanged.
 - [ ] Ensure Ready / START and Results layout work on mobile.
 
 ### Milestone 4 — Mobile Split Race
@@ -317,6 +319,11 @@ Latest mobile foundation: added a full mobile playability plan, shared mobile me
 - [x] Reflow Options into a complete single-column mobile form and move the title locale selector to the centered final row.
 - [x] Align Co-op countdown/results overlays with the full local Canvas and expose Visual Viewport geometry in QA state.
 - [x] Verify Japanese, Traditional Chinese, and English mobile dialogs without clipping or horizontal overflow.
+- [x] Raise the two-button mobile action row above the direction controls and safe-area swipe zone.
+- [x] Restyle the mobile title actions to match the dark Win95 Options controls.
+- [x] Pin the room-code dialog near the top of the viewport so the software keyboard does not cover it.
+- [x] Reflow mobile Best 5 into a contained single-column scroller with its Back action always reachable.
+- [x] Center desktop Best 5 against the full 634x436 cabinet and remove the desktop Options scrollbar.
 - [x] Run cross-browser desktop QA.
 - [ ] Run Firebase browser emulator / two-client smoke when environment is available.
 

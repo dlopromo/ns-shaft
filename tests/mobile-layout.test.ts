@@ -7,13 +7,29 @@ import {
 } from "../src/game/mobile";
 
 describe("mobile layout helpers", () => {
-  test("separates half-width directions from the bottom action bar", () => {
+  test("places the action bar above the half-width directions", () => {
     const main = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
     const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
     expect(main).toContain('id="mobile-directions"');
-    expect(main.indexOf('id="mobile-directions"')).toBeLessThan(main.indexOf('class="mobile-actions"'));
+    expect(main.indexOf('class="mobile-actions"')).toBeLessThan(main.indexOf('id="mobile-directions"'));
     expect(css).toMatch(/\.mobile-directions\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
     expect(css).toMatch(/\.mobile-direction\s*\{[^}]*width:\s*100%;[^}]*height:\s*96px/s);
+    expect(main).not.toContain('id="mobile-fullscreen"');
+    expect(css).toMatch(/\.mobile-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
+    expect(css).toMatch(/\.mobile-controls:not\(\[hidden\]\)\s*\{[^}]*bottom:\s*calc\(28px \+ var\(--mobile-safe-bottom\)\)/s);
+  });
+
+  test("uses a room-code dialog instead of a persistent online code field", () => {
+    const main = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+    expect(main).toContain('id="room-code-dialog"');
+    expect(main).toContain('id="room-code-input"');
+    expect(main).not.toContain('id="online-code-label"');
+  });
+
+  test("pins the mobile room-code dialog near the top for the software keyboard", () => {
+    const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.mobile-shell \.room-code-dialog\s*\{[^}]*position:\s*fixed;[^}]*top:\s*max\(/s);
+    expect(css).toMatch(/\.mobile-shell \.room-code-dialog\s*\{[^}]*bottom:\s*auto;/s);
   });
 
   test("keeps mobile dialogs selectable only inside form controls", () => {

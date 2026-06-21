@@ -237,10 +237,11 @@ canvas {
 .dialog h2 { margin: 0 0 8px; text-align: center; font-size: 17px; }
 .dialog label { display: flex; justify-content: space-between; gap: 25px; }
 #options-panel .dialog {
-  gap: 3px;
-  width: 400px;
-  max-height: 340px;
-  padding: 14px 16px;
+  gap: 2px;
+  width: 380px;
+  max-height: none;
+  overflow: visible;
+  padding: 11px 14px;
 }
 #options-panel .dialog h2 {
   margin: 0 0 2px;
@@ -483,14 +484,18 @@ canvas {
 .sound-preview button { padding: 0 3px; font-size: 10px; line-height: 14px; }
 .sound-preview code { font-size: 10px; }
 .sound-preview small { text-align: right; }
-.records-screen { background: rgba(0, 0, 0, .18); }
+.records-screen {
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, .18);
+}
 .records-content {
   position: relative;
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   width: 390px;
   height: 310px;
-  margin: 58px 0 0 37px;
+  margin: 0;
   padding: 12px 14px;
 }
 .records-content h2 { margin: 0 0 8px; text-align: center; }
@@ -531,6 +536,28 @@ canvas {
   gap: 12px;
   align-self: end;
 }
+.room-code-dialog {
+  width: min(360px, calc(100vw - 32px));
+  padding: 0;
+  border: 2px solid;
+  border-color: #fff #808080 #808080 #fff;
+  color: #000;
+  background: #d4d0c8;
+}
+.room-code-dialog::backdrop { background: rgba(0, 0, 0, .7); }
+.room-code-dialog form { display: grid; gap: 12px; padding: 18px; }
+.room-code-dialog h2,
+.room-code-dialog p { margin: 0; }
+.room-code-dialog h2 { text-align: center; font-size: 17px; }
+.room-code-dialog label { display: grid; gap: 6px; }
+.room-code-dialog input {
+  width: 100%;
+  box-sizing: border-box;
+  font: 20px monospace;
+  letter-spacing: 6px;
+  text-align: center;
+}
+.room-code-error { color: #b00020; font-weight: bold; }
 .online-state {
   position: absolute;
   z-index: 6;
@@ -704,6 +731,9 @@ canvas {
     font-size: 14px;
     text-align: center;
     white-space: nowrap;
+    color: #eee;
+    background: #454950;
+    border-color: #777b83 #17191c #17191c #777b83;
   }
   .mobile-language {
     grid-column: 1 / -1;
@@ -723,10 +753,10 @@ canvas {
     position: fixed;
     z-index: 30;
     right: max(12px, env(safe-area-inset-right, 0px));
-    bottom: calc(8px + var(--mobile-safe-bottom));
+    bottom: calc(28px + var(--mobile-safe-bottom));
     left: max(12px, env(safe-area-inset-left, 0px));
     display: grid;
-    grid-template-rows: 96px 44px;
+    grid-template-rows: 44px 96px;
     gap: 10px;
     width: auto;
     max-width: 560px;
@@ -760,9 +790,11 @@ canvas {
     position: relative;
     z-index: 31;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 7px;
     align-items: center;
+    justify-self: center;
+    width: min(100%, 360px);
   }
   .mobile-actions button {
     min-width: 0;
@@ -777,13 +809,6 @@ canvas {
     font-weight: bold;
     touch-action: manipulation;
   }
-  .mobile-actions #mobile-fullscreen {
-    min-height: 44px;
-    color: #eee;
-    background: #4b4a57;
-    border-radius: 5px;
-    font-size: 10px;
-  }
   .mobile-controls[data-disabled="true"] .mobile-direction { opacity: .45; }
   .mobile-shell .dialog-screen:not([hidden]),
   .mobile-shell .records-screen:not([hidden]),
@@ -797,7 +822,8 @@ canvas {
     overflow-x: hidden;
     overflow-y: auto;
     transform: none;
-    background: #d4d0c8;
+    color: #e6e6e6;
+    background: #141619;
     place-items: start center;
     touch-action: pan-y;
     -webkit-user-select: none;
@@ -820,7 +846,40 @@ canvas {
     max-height: none;
     margin: 0;
     overflow: visible;
-    background: #d4d0c8;
+    color: #e6e6e6;
+    background: #292c31;
+    border-color: #686c74 #111316 #111316 #686c74;
+  }
+  .mobile-shell .records-content {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+  }
+  .mobile-shell .records-content #records-list {
+    grid-template-columns: 1fr;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 4px;
+    overscroll-behavior: contain;
+  }
+  .mobile-shell .dialog :is(input, select),
+  .mobile-shell .records-content :is(input, select) {
+    color: #f0f0f0;
+    background: #3a3e44;
+    border-color: #777b83 #17191c #17191c #777b83;
+  }
+  .mobile-shell .dialog button,
+  .mobile-shell .records-content button {
+    color: #eee;
+    background: #454950;
+    border-color: #777b83 #17191c #17191c #777b83;
+  }
+  .mobile-shell .local-options-note,
+  .mobile-shell .online-settings-note { color: #b9bbc0; }
+  .mobile-shell .record-modes button[data-active="true"] {
+    color: #fff;
+    background: #315f45;
   }
   .mobile-shell #options-panel .dialog {
     display: grid;
@@ -845,7 +904,24 @@ canvas {
   .mobile-shell .player-name-settings input { width: 100%; }
   .mobile-shell #options-panel .dialog > button { width: 100%; min-height: 44px; }
   .mobile-shell .online-dialog,
-  .mobile-shell .records-content { border-color: #f4f2ed #8e8c86 #8e8c86 #f4f2ed; }
+  .mobile-shell .records-content { border-color: #686c74 #111316 #111316 #686c74; }
+  .mobile-shell .about-screen { background: #141619; }
+  .mobile-shell .room-code-dialog {
+    position: fixed;
+    top: max(calc(12px + env(safe-area-inset-top, 0px)), 8dvh);
+    right: 0;
+    bottom: auto;
+    left: 0;
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px));
+    margin: 0 auto;
+    color: #e6e6e6;
+    background: #292c31;
+    border-color: #686c74 #111316 #111316 #686c74;
+  }
+  .mobile-shell .room-code-dialog input {
+    color: #f0f0f0;
+    background: #3a3e44;
+  }
   .mobile-shell .about-screen img { margin-top: 24px; }
   .mobile-shell.race-active { width: min(100vw, 640px); height: auto; }
   .mobile-shell .race-stage {

@@ -376,7 +376,7 @@ describe("iPel-aligned millisecond simulation", () => {
     expect(game.snapshot().players[0].y).toBeCloseTo(game.snapshot().platforms[1].y);
   });
 
-  test("never generates the same exact platform variant three times in succession", () => {
+  test("never repeats an exact variant or generates more than two special rows", () => {
     const game = new GameSimulation({ seed: 482, difficulty: "hard", players: 1 });
     const generated = new Map<number, string>();
     for (let elapsed = 0; elapsed < 300_000; elapsed += 100) {
@@ -388,8 +388,13 @@ describe("iPel-aligned millisecond simulation", () => {
     }
     const variants = [...generated.entries()].sort(([a], [b]) => a - b).map(([, variant]) => variant);
     expect(variants.length).toBeGreaterThan(100);
+    for (let index = 1; index < variants.length; index += 1) {
+      if (variants[index] !== "normal") {
+        expect(variants[index]).not.toBe(variants[index - 1]);
+      }
+    }
     for (let index = 2; index < variants.length; index += 1) {
-      expect(new Set(variants.slice(index - 2, index + 1)).size).toBeGreaterThan(1);
+      expect(variants.slice(index - 2, index + 1)).toContain("normal");
     }
   });
 

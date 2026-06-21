@@ -50,15 +50,20 @@ async function runRoomFlow(mode) {
     ]);
     await openOnline(host, `HOST-${mode.toUpperCase()}-QA`);
     await host.getByRole("button", { name: "部屋を作る" }).click();
-    await host.waitForFunction(() => /^\d{4}$/.test(document.querySelector("#online-code")?.value ?? ""));
-    roomCode = await host.locator("#online-code").inputValue();
+    await host.locator("#room-code-dialog").waitFor({ state: "visible" });
+    await host.locator("#room-code-dialog").getByRole("button", { name: "部屋を作る" }).click();
+    await host.waitForFunction(() => /^ROOM \d{4}$/.test(
+      document.querySelector("[data-online-header]")?.textContent?.trim() ?? ""
+    ));
+    roomCode = (await host.locator("[data-online-header]").first().textContent()).match(/\d{4}/)?.[0] ?? "";
     await host.getByRole("button", { name: "コードをコピー" }).click();
     assert(await host.evaluate(() => navigator.clipboard.readText()) === roomCode,
       `${mode}: created room code was not copied`);
 
     await openOnline(guest, `GUEST-${mode.toUpperCase()}-QA`);
-    await guest.locator("#online-code").fill(roomCode);
     await guest.getByRole("button", { name: "部屋に入る" }).click();
+    await guest.locator("#room-code-input").fill(roomCode);
+    await guest.locator("#room-code-dialog").getByRole("button", { name: "部屋に入る" }).click();
     await Promise.all([
       host.waitForFunction(() =>
         document.querySelector('.online-player[data-player="1"]')?.dataset.status === "connected"),
