@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   mobileOrientationForViewport,
   mobilePrimaryAction,
@@ -6,6 +7,21 @@ import {
 } from "../src/game/mobile";
 
 describe("mobile layout helpers", () => {
+  test("separates half-width directions from the bottom action bar", () => {
+    const main = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+    const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
+    expect(main).toContain('id="mobile-directions"');
+    expect(main.indexOf('id="mobile-directions"')).toBeLessThan(main.indexOf('class="mobile-actions"'));
+    expect(css).toMatch(/\.mobile-directions\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
+    expect(css).toMatch(/\.mobile-direction\s*\{[^}]*width:\s*100%;[^}]*height:\s*96px/s);
+  });
+
+  test("keeps mobile dialogs selectable only inside form controls", () => {
+    const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.mobile-shell \.dialog-screen:not\(\[hidden\]\)[^{]*\{[^}]*user-select:\s*none/s);
+    expect(css).toMatch(/\.mobile-shell :is\(input, select, textarea\)\s*\{[^}]*user-select:\s*text/s);
+  });
+
   test("detects portrait and landscape from viewport dimensions", () => {
     expect(mobileOrientationForViewport(390, 844)).toBe("portrait");
     expect(mobileOrientationForViewport(844, 390)).toBe("landscape");

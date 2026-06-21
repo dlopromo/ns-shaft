@@ -29,24 +29,56 @@ for (const [name, viewport] of Object.entries({
       frame: box(".game-frame"),
       menu: box("#mobile-title-menu"),
       language: box("#mobile-locale"),
-      desktopMenuVisible: getComputedStyle(document.querySelector(".main-menu")).display !== "none"
+      desktopMenuVisible: getComputedStyle(document.querySelector(".main-menu")).display !== "none",
+      languageCentered: Math.abs((box(".mobile-language").left + box(".mobile-language").right) / 2 - innerWidth / 2),
+      languageIsLast: document.querySelector(".mobile-language").compareDocumentPosition(
+        document.querySelector("#mobile-title-menu button:last-of-type")
+      ) === Node.DOCUMENT_POSITION_PRECEDING
     };
   });
+  const portraitLanguageFailure = viewport.width < viewport.height && title.languageCentered > 2;
   if (!title.state.mobile.active || title.desktopMenuVisible || title.language.width < 120 ||
       title.frame.left < 0 || title.frame.right > viewport.width || title.frame.bottom > viewport.height ||
-      title.menu.right > viewport.width) {
+      title.menu.right > viewport.width || portraitLanguageFailure || !title.languageIsLast) {
     throw new Error(`${name} title layout failed: ${JSON.stringify(title)}`);
   }
   await page.screenshot({ path: new URL(`${name}-title.png`, output).pathname, fullPage: true });
 
   await page.locator("#mobile-title-menu [data-open='options']").click();
-  const dialog = await page.locator("#options-panel").evaluate((panel) => {
-    const rect = panel.getBoundingClientRect();
-    return { width: rect.width, height: rect.height, overflowY: getComputedStyle(panel).overflowY };
-  });
-  if (Math.round(dialog.width) !== viewport.width || Math.round(dialog.height) !== viewport.height ||
-      !["auto", "scroll"].includes(dialog.overflowY)) {
-    throw new Error(`${name} dialog layout failed: ${JSON.stringify(dialog)}`);
+  for (const locale of ["ja", "zh-Hant", "en"]) {
+    await page.locator("#mobile-locale").selectOption(locale, { force: true });
+    const dialog = await page.locator("#options-panel").evaluate((panel) => {
+      const rect = panel.getBoundingClientRect();
+      const content = panel.querySelector(".dialog");
+      panel.scrollTop = panel.scrollHeight;
+      const close = panel.querySelector("[data-close]").getBoundingClientRect();
+      const context = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+      const gesture = new Event("gesturestart", { bubbles: true, cancelable: true });
+      const doubleTap = new MouseEvent("dblclick", { bubbles: true, cancelable: true });
+      content.dispatchEvent(context);
+      content.dispatchEvent(gesture);
+      content.dispatchEvent(doubleTap);
+      return {
+        width: rect.width,
+        height: rect.height,
+        overflowY: getComputedStyle(panel).overflowY,
+        closeVisible: close.bottom <= rect.bottom + 1,
+        contextPrevented: context.defaultPrevented,
+        gesturePrevented: gesture.defaultPrevented,
+        doubleTapPrevented: doubleTap.defaultPrevented,
+        horizontalOverflow: document.documentElement.scrollWidth - innerWidth,
+        background: getComputedStyle(panel).backgroundColor
+      };
+    });
+    if (Math.round(dialog.width) !== viewport.width || Math.round(dialog.height) !== viewport.height ||
+        !["auto", "scroll"].includes(dialog.overflowY) || !dialog.closeVisible || !dialog.contextPrevented ||
+        !dialog.gesturePrevented || !dialog.doubleTapPrevented || dialog.horizontalOverflow > 1 ||
+        dialog.background !== "rgb(212, 208, 200)") {
+      throw new Error(`${name}/${locale} dialog layout failed: ${JSON.stringify(dialog)}`);
+    }
+    if (name === "portrait-430" && locale === "ja") {
+      await page.screenshot({ path: new URL(`${name}-options-ja.png`, output).pathname, fullPage: true });
+    }
   }
   await page.locator("#options-panel [data-close]").click();
 
@@ -56,17 +88,32 @@ for (const [name, viewport] of Object.entries({
     const box = (selector) => document.querySelector(selector).getBoundingClientRect();
     const left = box("#mobile-left");
     const right = box("#mobile-right");
+    const directions = box("#mobile-directions");
+    const actions = box(".mobile-actions");
     return {
       state: JSON.parse(window.render_game_to_text()),
       top: document.querySelector(".mobile-controls").getBoundingClientRect().top,
       bodyBackground: getComputedStyle(document.body).backgroundColor,
       shellBackground: getComputedStyle(document.querySelector(".mobile-shell")).backgroundColor,
+      viewport: { width: visualViewport?.width ?? innerWidth, height: visualViewport?.height ?? innerHeight, scale: visualViewport?.scale ?? 1 },
+      directions: { left: directions.left, right: directions.right, top: directions.top, bottom: directions.bottom, width: directions.width },
+      actions: { top: actions.top, bottom: actions.bottom },
+      actionTextClipped: [...document.querySelectorAll(".mobile-actions button")]
+        .some((button) => button.scrollWidth > button.clientWidth + 1),
       left: { left: left.left, width: left.width, height: left.height },
       right: { right: right.right, width: right.width, height: right.height }
     };
   });
+  const portraitControlFailure = viewport.width < viewport.height &&
+    (controls.left.width < viewport.width * 0.4 || controls.right.width < viewport.width * 0.4 ||
+      controls.left.height !== 96 || controls.right.height !== 96 || controls.actions.top < controls.directions.bottom);
+  const landscapeControlFailure = viewport.width >= viewport.height &&
+    Math.abs(controls.left.width - controls.right.width) > 2;
   if (controls.state.mobile.primaryAction !== "pause" || controls.left.left > 32 ||
-      viewport.width - controls.right.right > 32 || controls.left.width < 44 || controls.right.width < 44) {
+      viewport.width - controls.right.right > 32 || portraitControlFailure || landscapeControlFailure ||
+      controls.actionTextClipped || controls.viewport.scale !== 1 ||
+      controls.state.mobile.viewport.width !== controls.viewport.width ||
+      controls.state.mobile.viewport.height !== controls.viewport.height) {
     throw new Error(`${name} controls failed: ${JSON.stringify(controls)}`);
   }
   if (controls.bodyBackground !== "rgb(9, 10, 12)" || controls.shellBackground !== "rgb(21, 23, 26)") {
@@ -83,6 +130,19 @@ for (const [name, viewport] of Object.entries({
   });
   await page.locator("#mobile-primary").click();
   await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).mobile.primaryAction === "pause");
+
+  await page.evaluate(() => window.__nsShaftQa.startCoop());
+  await page.evaluate(() => window.__nsShaftQa.setOnlineRoundPhase("countdown", 2000));
+  await page.waitForFunction(() => document.querySelector(".game-frame .online-state")?.dataset.countdown === "true");
+  const coop = await page.evaluate(() => {
+    const canvas = document.querySelector("#game").getBoundingClientRect();
+    const dialog = document.querySelector(".game-frame .online-state-dialog").getBoundingClientRect();
+    const center = (rect) => ({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+    return { canvas: center(canvas), dialog: center(dialog) };
+  });
+  if (Math.abs(coop.canvas.x - coop.dialog.x) > 2 || Math.abs(coop.canvas.y - coop.dialog.y) > 2) {
+    throw new Error(`${name} co-op center failed: ${JSON.stringify(coop)}`);
+  }
 
   await page.evaluate(() => window.__nsShaftQa.startRace());
   await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).ui === "race");

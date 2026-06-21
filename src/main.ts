@@ -100,6 +100,7 @@ declare global {
       setPlayer: (index: number, patch: Record<string, unknown>) => void;
       setPlatforms: (platforms: Record<string, unknown>[]) => void;
       setProgress: (floorSequence: number) => void;
+      startCoop: () => void;
       startRace: () => void;
       setRaceRemotePlayer: (patch: Record<string, unknown>) => void;
       setOnlineRoundPhase: (phase: OnlineRoomPhase, endsInMs?: number) => void | Promise<void>;
@@ -322,6 +323,11 @@ root.innerHTML = `
       </div>
     </section>
     <nav id="mobile-title-menu" class="mobile-title-menu" aria-label="${t("mobile.menuAria")}" data-i18n-aria="mobile.menuAria">
+      <button data-start="1" data-i18n="menu.onePlayer">${t("menu.onePlayer")}</button>
+      <button data-open="online" data-i18n="menu.online">${t("menu.online")}</button>
+      <button data-open="records" data-i18n="menu.records">${t("menu.records")}</button>
+      <button data-open="options" data-i18n="menu.options">${t("menu.options")}</button>
+      <button data-open="about" data-i18n="menu.about">${t("menu.about")}</button>
       <label class="mobile-language"><span data-i18n="options.language">${t("options.language")}</span>
         <select id="mobile-locale" aria-label="${t("options.language")}" data-i18n-aria="options.language">
           <option value="ja" data-i18n="options.japanese">${t("options.japanese")}</option>
@@ -329,20 +335,17 @@ root.innerHTML = `
           <option value="en" data-i18n="options.english">${t("options.english")}</option>
         </select>
       </label>
-      <button data-start="1" data-i18n="menu.onePlayer">${t("menu.onePlayer")}</button>
-      <button data-open="online" data-i18n="menu.online">${t("menu.online")}</button>
-      <button data-open="records" data-i18n="menu.records">${t("menu.records")}</button>
-      <button data-open="options" data-i18n="menu.options">${t("menu.options")}</button>
-      <button data-open="about" data-i18n="menu.about">${t("menu.about")}</button>
     </nav>
     <nav id="mobile-controls" class="mobile-controls" aria-label="${t("mobile.controlsAria")}" data-i18n-aria="mobile.controlsAria">
-      <button id="mobile-left" type="button" class="mobile-direction mobile-left" aria-label="${t("mobile.left")}" data-i18n-aria="mobile.left">◀</button>
+      <div id="mobile-directions" class="mobile-directions">
+        <button id="mobile-left" type="button" class="mobile-direction mobile-left" aria-label="${t("mobile.left")}" data-i18n-aria="mobile.left">◀</button>
+        <button id="mobile-right" type="button" class="mobile-direction mobile-right" aria-label="${t("mobile.right")}" data-i18n-aria="mobile.right">▶</button>
+      </div>
       <div class="mobile-actions">
         <button id="mobile-primary" type="button">${t("common.pause")}</button>
         <button id="mobile-abort" type="button" data-i18n="common.abort">${t("common.abort")}</button>
         <button id="mobile-fullscreen" type="button" data-i18n="mobile.fullscreen">${t("mobile.fullscreen")}</button>
       </div>
-      <button id="mobile-right" type="button" class="mobile-direction mobile-right" aria-label="${t("mobile.right")}" data-i18n-aria="mobile.right">▶</button>
     </nav>
   </main>`;
 
@@ -411,6 +414,7 @@ const keyboard = new KeyboardInput();
 const touchInput = new TouchInput();
 const input = new CombinedInput(keyboard, touchInput);
 const mobileControls = document.querySelector<HTMLElement>("#mobile-controls")!;
+const mobileDirections = document.querySelector<HTMLElement>("#mobile-directions")!;
 const mobileLeft = document.querySelector<HTMLButtonElement>("#mobile-left")!;
 const mobileRight = document.querySelector<HTMLButtonElement>("#mobile-right")!;
 const mobilePrimary = document.querySelector<HTMLButtonElement>("#mobile-primary")!;
@@ -477,7 +481,15 @@ abortControl.hidden = true;
 mobileControls.hidden = true;
 
 const isMobileActive = () => mobileMatcher.matches;
-const currentMobileOrientation = () => mobileOrientationForViewport(window.innerWidth, window.innerHeight);
+const mobileViewport = () => ({
+  width: window.visualViewport?.width ?? window.innerWidth,
+  height: window.visualViewport?.height ?? window.innerHeight,
+  scale: window.visualViewport?.scale ?? 1
+});
+const currentMobileOrientation = () => {
+  const viewport = mobileViewport();
+  return mobileOrientationForViewport(viewport.width, viewport.height);
+};
 
 function panelIsOpen(): boolean {
   return title.hidden === false || optionsPanel.hidden === false || soundPanel.hidden === false || recordsPanel.hidden === false || onlinePanel.hidden === false || aboutPanel.hidden === false;
@@ -1601,8 +1613,16 @@ window.addEventListener("blur", () => touchInput.clear());
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") touchInput.clear();
 });
-mobileControls.addEventListener("contextmenu", (event) => event.preventDefault());
 mobileControls.addEventListener("touchmove", (event) => event.preventDefault(), { passive: false });
+
+const isEditableMobileTarget = (target: EventTarget | null): boolean =>
+  target instanceof Element && Boolean(target.closest("input, select, textarea"));
+const preventMobileGesture = (event: Event): void => {
+  if (isMobileActive() && !isEditableMobileTarget(event.target)) event.preventDefault();
+};
+for (const eventName of ["gesturestart", "gesturechange", "gestureend", "dblclick", "contextmenu"]) {
+  cabinet.addEventListener(eventName, preventMobileGesture, { passive: false });
+}
 
 
 document.querySelectorAll<HTMLButtonElement>("[data-start]").forEach((button) => {
@@ -1865,8 +1885,9 @@ window.addEventListener("blur", () => {
 });
 
 function updateFullscreenScale(): void {
+  const viewport = mobileViewport();
   const desktopScale = integerScaleForViewport(window.innerWidth, window.innerHeight);
-  const activeMobileScale = mobileScaleForViewport(window.innerWidth, window.innerHeight);
+  const activeMobileScale = mobileScaleForViewport(viewport.width, viewport.height);
   const scale = String(isMobileActive() ? activeMobileScale : desktopScale);
   const raceScale = String(Math.min(
     1,
@@ -1880,6 +1901,7 @@ function updateFullscreenScale(): void {
   syncMobileControls();
 }
 window.addEventListener("resize", updateFullscreenScale);
+window.visualViewport?.addEventListener("resize", updateFullscreenScale);
 document.addEventListener("fullscreenchange", updateFullscreenScale);
 updateFullscreenScale();
 void resumeSavedOnlineRoom();
@@ -1927,7 +1949,10 @@ window.render_game_to_text = () => JSON.stringify({
     direction: touchInput.peekDirection() === "none" ? "neutral" : touchInput.peekDirection(),
     primaryAction: currentMobilePrimaryAction,
     abortAvailable: mobileControlsVisible,
-    fullscreenAvailable: Boolean(document.fullscreenEnabled)
+    fullscreenAvailable: Boolean(document.fullscreenEnabled),
+    viewport: mobileViewport(),
+    directionsVisible: mobileControlsVisible && !mobileDirections.hidden,
+    actionsVisible: mobileControlsVisible
   }
 });
 window.advanceTime = (ms: number) => {
@@ -1942,6 +1967,31 @@ if (qaMode) {
     setPlayer: (index, patch) => game?.debugSetPlayer(index, patch),
     setPlatforms: (platforms) => game?.debugSetPlatforms(platforms as never[]),
     setProgress: (floorSequence) => game?.debugSetProgress(floorSequence),
+    startCoop: () => {
+      const room: OnlineRoomHandle = {
+        roomCode: "0000",
+        role: "host",
+        playerId: 0,
+        mode: "coop"
+      };
+      onlineRoom = room;
+      onlinePhase = "playing";
+      onlineRoomData = {
+        meta: { phase: "playing", round: 1, seed: 1337, mode: "coop" },
+        players: {
+          0: { connected: true, name: "YOU" },
+          1: { connected: true, name: "OPPONENT" }
+        }
+      };
+      prepareOnlineCoop(room, {
+        seed: 1337,
+        phase: "playing",
+        round: 1,
+        mode: "coop",
+        difficulty: save.settings.difficulty,
+        options: save.settings
+      });
+    },
     startRace: () => {
       const room: OnlineRoomHandle = {
         roomCode: "0000",

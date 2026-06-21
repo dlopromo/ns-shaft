@@ -312,6 +312,11 @@ Latest mobile foundation: added a full mobile playability plan, shared mobile me
 - [x] Add dedicated mobile browser QA for 360x640, 390x844, 430x932, and 844x390.
 - [x] Preserve the 634:436 Split Race preview ratio and align portrait controls across game modes.
 - [x] Center Race countdown/results overlays on the local 634x436 canvas and switch the mobile shell to charcoal.
+- [x] Split portrait touch controls into two half-width 96px direction keys and a safe-area bottom action bar.
+- [x] Prevent mobile double-tap, pinch, context-menu, callout, and non-input text-selection gestures.
+- [x] Reflow Options into a complete single-column mobile form and move the title locale selector to the centered final row.
+- [x] Align Co-op countdown/results overlays with the full local Canvas and expose Visual Viewport geometry in QA state.
+- [x] Verify Japanese, Traditional Chinese, and English mobile dialogs without clipping or horizontal overflow.
 - [x] Run cross-browser desktop QA.
 - [ ] Run Firebase browser emulator / two-client smoke when environment is available.
 
